@@ -1,0 +1,11 @@
+{
+  // Cloudflare Workers: sirve la app Angular como sitio estático
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "samarfitapp",
+  "compatibility_date": "2026-09-01",
+  "assets": {
+    "directory": "./dist/samarfitapp/browser",
+    // Cualquier ruta (/inventario, /informes…) carga index.html y Angular resuelve la página
+    "not_found_handling": "single-page-application"
+  }
+}

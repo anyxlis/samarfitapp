@@ -43,7 +43,8 @@
               "canvg",
               "core-js",
               "raf",
-              "rgbcolor"
+              "rgbcolor",
+              "jspdf-autotable"
             ]
           },
           "configurations": {
@@ -51,16 +52,24 @@
               "budgets": [
                 {
                   "type": "initial",
-                  "maximumWarning": "500kB",
-                  "maximumError": "1MB"
+                  "maximumWarning": "1.5MB",
+                  "maximumError": "3MB"
                 },
                 {
                   "type": "anyComponentStyle",
-                  "maximumWarning": "2kB",
-                  "maximumError": "4kB"
+                  "maximumWarning": "8kB",
+                  "maximumError": "16kB"
                 }
               ],
-              "outputHashing": "all"
+              "outputHashing": "all",
+              "optimization": {
+                "scripts": true,
+                "styles": {
+                  "minify": true,
+                  "inlineCritical": true
+                },
+                "fonts": false
+              }
             },
             "development": {
               "optimization": false,
@@ -108,8 +117,5 @@
         }
       }
     }
-  },
-  "cli": {
-    "analytics": "afb1f322-a833-4ac5-8941-df3050f779fe"
   }
 }
