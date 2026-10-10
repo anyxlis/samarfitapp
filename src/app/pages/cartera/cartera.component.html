@@ -1,0 +1,150 @@
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+  <h2 class="mb-0 me-auto">{{ titulo }}</h2>
+  <app-btn-pdf (generar)="exportarPdf()" [disabled]="!grupos().length" />
+</div>
+
+<!-- Edades de la cartera -->
+<div class="row g-3 mb-3">
+  <div class="col-12 col-lg-3">
+    <div class="sf-kpi" role="button" [class.sf-kpi-activo]="rango() === ''" (click)="rango.set('')">
+      <div class="lbl"><i class="bi bi-wallet2 me-1"></i>{{ esCobrar ? 'Te deben' : 'Debes' }} en total</div>
+      <div class="val fs-3">{{ resumen().total | cop }}</div>
+      <div class="small" [class.text-danger]="resumen().vencido > 0" [class.text-muted]="!resumen().vencido">
+        Vencido: {{ resumen().vencido | cop }}
+      </div>
+    </div>
+  </div>
+  @for (r of rangos; track r.id) {
+    <div class="col-6 col-lg">
+      <div class="sf-kpi sf-rango-{{ r.clase }}" role="button" [class.sf-kpi-activo]="rango() === r.id" (click)="rango.set(rango() === r.id ? '' : r.id)">
+        <div class="lbl">{{ r.nombre }}</div>
+        <div class="val">{{ resumen()[r.id] | cop }}</div>
+      </div>
+    </div>
+  }
+</div>
+
+<div class="card mb-3">
+  <div class="card-body">
+    <div class="row g-2">
+      <div class="col-md-8">
+        <div class="input-group">
+          <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
+          <input class="form-control" [placeholder]="'Buscar ' + tercero.toLowerCase() + ', factura o teléfono…'" [value]="busqueda()" (input)="busqueda.set($any($event.target).value)" />
+        </div>
+      </div>
+      <div class="col-md-4">
+        <select class="form-select" [value]="rango()" (change)="rango.set($any($event.target).value)">
+          <option value="">Todas las facturas pendientes</option>
+          <option value="vencidas">Solo vencidas</option>
+          @for (r of rangos; track r.id) { <option [value]="r.id">{{ r.nombre }}</option> }
+        </select>
+      </div>
+    </div>
+  </div>
+</div>
+
+@if (cargando()) {
+  <div class="text-center py-5"><span class="spinner-border spinner-border-sm text-secondary"></span></div>
+} @else {
+  <div class="d-flex flex-column gap-2">
+    @for (g of grupos(); track g.id) {
+      <div class="card">
+        <div class="card-body py-2 px-3">
+          <div class="d-flex flex-wrap align-items-center gap-2">
+            <button class="btn btn-sm btn-light" (click)="alternar(g.id)" [attr.aria-expanded]="abiertos().has(g.id)">
+              <i class="bi" [class.bi-chevron-down]="abiertos().has(g.id)" [class.bi-chevron-right]="!abiertos().has(g.id)"></i>
+            </button>
+            <div class="me-auto min-w-0" role="button" (click)="alternar(g.id)">
+              <div class="fw-semibold text-truncate">{{ g.nombre }}</div>
+              <div class="small text-muted">
+                {{ g.facturas.length }} {{ g.facturas.length === 1 ? 'factura' : 'facturas' }}
+                @if (g.telefono) { · {{ g.telefono }} }
+                @if (g.ultimoRecordatorio) { · <i class="bi bi-whatsapp"></i> recordado {{ g.ultimoRecordatorio | date: 'dd/MM/yy' }} }
+              </div>
+            </div>
+            @if (g.maxMora > 0) {
+              <span class="badge {{ claseMora(g.maxMora) }}">{{ g.maxMora }} días de mora</span>
+            } @else {
+              <span class="badge text-bg-success">Al día</span>
+            }
+            <div class="text-end" style="min-width: 120px">
+              <div class="fw-semibold fs-5 lh-1">{{ g.saldo | cop }}</div>
+              @if (g.vencido > 0 && g.vencido < g.saldo) { <div class="small text-danger">vencido {{ g.vencido | cop }}</div> }
+            </div>
+            <div class="d-flex gap-1">
+              @if (esCobrar) {
+                <button class="btn btn-sm btn-success" title="Enviar recordatorio por WhatsApp" (click)="abrirRecordatorio(g)" [disabled]="!g.telefono">
+                  <i class="bi bi-whatsapp"></i><span class="d-none d-md-inline ms-1">Recordar</span>
+                </button>
+              }
+              <app-btn-pdf [compacto]="true" (generar)="estadoCuenta(g)" title="Estado de cuenta" />
+            </div>
+          </div>
+        </div>
+
+        @if (abiertos().has(g.id)) {
+          <div class="table-responsive border-top">
+            <table class="table table-sm align-middle mb-0">
+              <thead class="table-light small">
+                <tr>
+                  <th class="ps-3">Factura</th><th class="d-none d-sm-table-cell">Fecha</th><th>Vence</th>
+                  <th class="text-end d-none d-md-table-cell">Total</th><th class="text-end d-none d-md-table-cell">{{ esCobrar ? 'Abonado' : 'Pagado' }}</th>
+                  <th class="text-end">Saldo</th><th class="text-center">Mora</th><th class="pe-3"></th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (f of g.facturas; track f.factura_id) {
+                  <tr>
+                    <td class="ps-3 fw-semibold">{{ f.numero }}</td>
+                    <td class="d-none d-sm-table-cell small">{{ fechaCorta(f.fecha) }}</td>
+                    <td class="small" [class.text-danger]="f.dias_mora > 0">{{ fechaCorta(f.fecha_vencimiento) || '—' }}</td>
+                    <td class="text-end d-none d-md-table-cell">{{ f.total | cop }}</td>
+                    <td class="text-end d-none d-md-table-cell text-success">{{ f.pagado | cop }}</td>
+                    <td class="text-end fw-semibold">{{ f.saldo | cop }}</td>
+                    <td class="text-center"><span class="badge {{ claseMora(f.dias_mora) }}">{{ f.dias_mora > 0 ? f.dias_mora + ' d' : 'Al día' }}</span></td>
+                    <td class="pe-3 text-end">
+                      <a class="btn btn-sm btn-gold text-nowrap" [routerLink]="[rutaFacturas, f.factura_id]">
+                        <i class="bi bi-cash-coin me-1"></i>{{ esCobrar ? 'Abonar' : 'Pagar' }}
+                      </a>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </div>
+    } @empty {
+      <div class="card"><div class="card-body text-center text-muted py-5">
+        <i class="bi bi-emoji-smile fs-3 d-block mb-1"></i>
+        {{ esCobrar ? 'Nadie te debe en este filtro.' : 'No tienes deudas pendientes en este filtro.' }}
+      </div></div>
+    }
+  </div>
+}
+
+<!-- Modal recordatorio -->
+@if (modal() && recordatorio.grupo; as g) {
+  <div class="modal d-block" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-fullscreen-sm-down">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-whatsapp text-success me-1"></i>Recordatorio a {{ g.nombre }}</h5>
+          <button type="button" class="btn-close" (click)="modal.set(false)"></button>
+        </div>
+        <div class="modal-body">
+          <label class="form-label small text-muted">Puedes ajustar el mensaje antes de enviarlo</label>
+          <textarea class="form-control" rows="7" [(ngModel)]="recordatorio.mensaje"></textarea>
+          <div class="small text-muted mt-2">Se enviará a <b>{{ g.telefono }}</b>. La plantilla se cambia en Configuración.</div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-light me-auto" (click)="copiarMensaje()"><i class="bi bi-clipboard me-1"></i>Copiar</button>
+          <button type="button" class="btn btn-light" (click)="modal.set(false)">Cancelar</button>
+          <button type="button" class="btn btn-success" (click)="enviarRecordatorio()"><i class="bi bi-whatsapp me-1"></i>Abrir WhatsApp</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="modal-backdrop show"></div>
+}

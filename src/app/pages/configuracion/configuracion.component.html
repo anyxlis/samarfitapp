@@ -1,0 +1,282 @@
+<h2 class="mb-3">Configuración</h2>
+
+<ul class="nav nav-pills sf-tabs flex-nowrap overflow-auto mb-3">
+  @for (t of [
+    { id: 'empresa', txt: 'Empresa', ico: 'building' },
+    { id: 'recordatorio', txt: 'Mensaje de cobro', ico: 'whatsapp' },
+    { id: 'consecutivos', txt: 'Consecutivos', ico: '123' },
+    { id: 'categorias', txt: 'Categorías', ico: 'tags' },
+    { id: 'seguridad', txt: 'Contraseña', ico: 'shield-lock' }
+  ]; track t.id) {
+    <li class="nav-item">
+      <button class="nav-link text-nowrap" [class.active]="pestana() === t.id" (click)="pestana.set($any(t.id))">
+        <i class="bi bi-{{ t.ico }} me-1"></i>{{ t.txt }}
+      </button>
+    </li>
+  }
+</ul>
+
+<!-- ================= Empresa ================= -->
+@if (pestana() === 'empresa') {
+  <form class="card" (ngSubmit)="guardarEmpresa()">
+    <div class="card-body">
+      <p class="text-muted small">Estos datos aparecen en el encabezado de las facturas y de todos los PDF.</p>
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label class="form-label">Nombre del negocio *</label>
+          <input class="form-control" name="nombre" [(ngModel)]="empresa['nombre']" />
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Eslogan</label>
+          <input class="form-control" name="eslogan" [(ngModel)]="empresa['eslogan']" placeholder="by Sandra Cochet" />
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">NIT / Cédula</label>
+          <input class="form-control" name="nit" [(ngModel)]="empresa['nit']" />
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Teléfono / WhatsApp</label>
+          <input class="form-control" name="telefono" [(ngModel)]="empresa['telefono']" />
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Correo</label>
+          <input class="form-control" type="email" name="correo" [(ngModel)]="empresa['correo']" />
+        </div>
+        <div class="col-md-8">
+          <label class="form-label">Dirección</label>
+          <input class="form-control" name="direccion" [(ngModel)]="empresa['direccion']" />
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Ciudad</label>
+          <input class="form-control" name="ciudad" [(ngModel)]="empresa['ciudad']" />
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Sitio web / Instagram</label>
+          <input class="form-control" name="web" [(ngModel)]="empresa['sitio_web']" placeholder="@samarfit" />
+        </div>
+
+        <div class="col-12 mt-4">
+          <h6 class="mb-0"><i class="bi bi-bank me-1 text-gold"></i>Datos fiscales</h6>
+          <p class="small text-muted mb-0">Aparecen en el encabezado de los PDF. Son los que exige la DIAN en una factura; tómalos del RUT.</p>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Razón social / Nombre del titular</label>
+          <input class="form-control" name="razon" [(ngModel)]="empresa['razon_social']" placeholder="Ej: Sandra Cochet (como aparece en el RUT)" />
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Tipo de persona</label>
+          <select class="form-select" name="tipo_persona" [(ngModel)]="empresa['tipo_persona']">
+            <option value="natural">Persona natural</option>
+            <option value="juridica">Persona jurídica</option>
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Dígito de verificación (DV)</label>
+          <input class="form-control" name="dv" [(ngModel)]="empresa['dv']" maxlength="1" inputmode="numeric" placeholder="Ej: 7" />
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Régimen / IVA</label>
+          <select class="form-select" name="regimen" [(ngModel)]="empresa['regimen']">
+            @for (r of regimenes; track r) { <option [value]="r">{{ r }}</option> }
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Responsabilidad fiscal <span class="small text-muted">(RUT casilla 53)</span></label>
+          <input class="form-control" name="resp" [(ngModel)]="empresa['responsabilidades']" placeholder="R-99-PN" />
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Actividad económica (CIIU)</label>
+          <input class="form-control" name="ciiu" [(ngModel)]="empresa['actividad_ciiu']" placeholder="4771" />
+        </div>
+
+        <div class="col-12 mt-4">
+          <h6 class="mb-0"><i class="bi bi-file-earmark-check me-1 text-gold"></i>Resolución de facturación DIAN</h6>
+          <p class="small text-muted mb-0">Llénala cuando la DIAN te autorice la numeración. Se imprime en cada factura de venta. Si la dejas vacía, no aparece.</p>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">No. de resolución</label>
+          <input class="form-control" name="res_num" [(ngModel)]="empresa['resolucion_numero']" placeholder="18764000000000" />
+        </div>
+        <div class="col-6 col-md-4">
+          <label class="form-label">Fecha de la resolución</label>
+          <input class="form-control" type="date" name="res_fecha" [(ngModel)]="empresa['resolucion_fecha']" />
+        </div>
+        <div class="col-6 col-md-4">
+          <label class="form-label">Vigente hasta</label>
+          <input class="form-control" type="date" name="res_vig" [(ngModel)]="empresa['resolucion_vigencia_hasta']" />
+        </div>
+        <div class="col-4">
+          <label class="form-label">Prefijo</label>
+          <input class="form-control text-uppercase" name="res_pref" [(ngModel)]="empresa['resolucion_prefijo']" placeholder="FV" />
+        </div>
+        <div class="col-4">
+          <label class="form-label">Desde el No.</label>
+          <input class="form-control" appNumero name="res_desde" [(ngModel)]="empresa['resolucion_desde']" />
+        </div>
+        <div class="col-4">
+          <label class="form-label">Hasta el No.</label>
+          <input class="form-control" appNumero name="res_hasta" [(ngModel)]="empresa['resolucion_hasta']" />
+        </div>
+        <div class="col-12">
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="fe" name="fe" [(ngModel)]="empresa['factura_electronica']" />
+            <label class="form-check-label" for="fe">Ya facturo electrónicamente con esta resolución</label>
+          </div>
+        </div>
+        @if (textoResolucionPrev) {
+          <div class="col-12"><div class="small p-2 border rounded bg-white"><span class="text-muted">Así se verá en la factura:</span><br />{{ textoResolucionPrev }}</div></div>
+        }
+
+        <div class="col-12 mt-4">
+          <label class="form-label">Mensaje al pie de las facturas de venta</label>
+          <input class="form-control" name="pie" [(ngModel)]="empresa['pie_factura']" placeholder="Gracias por tu compra · Cambios dentro de los 8 días con factura" />
+        </div>
+      </div>
+    </div>
+    <div class="card-footer bg-white text-end">
+      <button class="btn btn-primary" [disabled]="guardando()"><i class="bi bi-check2 me-1"></i>Guardar</button>
+    </div>
+  </form>
+}
+
+<!-- ================= Recordatorio ================= -->
+@if (pestana() === 'recordatorio') {
+  <form class="row g-3" (ngSubmit)="guardarEmpresa()">
+    <div class="col-lg-7">
+      <div class="card h-100">
+        <div class="card-body">
+          <label class="form-label fw-semibold">Plantilla del recordatorio de cobro</label>
+          <p class="small text-muted mb-2">Toca una variable para insertarla donde está el cursor. Al enviar, se reemplaza con los datos reales del cliente.</p>
+          <div class="d-flex flex-wrap gap-1 mb-2">
+            @for (v of variables; track v.clave) {
+              <button type="button" class="btn btn-sm btn-outline-secondary" [title]="v.desc" (click)="insertarVariable(v.clave)">{{ v.clave }}</button>
+            }
+          </div>
+          <textarea #plantillaRef class="form-control" rows="7" name="plantilla" [(ngModel)]="empresa['plantilla_recordatorio']"></textarea>
+          <div class="d-flex justify-content-between mt-3">
+            <button type="button" class="btn btn-link px-0 text-muted" (click)="restaurarPlantilla()">Restaurar mensaje original</button>
+            <button class="btn btn-primary" [disabled]="guardando()"><i class="bi bi-check2 me-1"></i>Guardar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-5">
+      <div class="card h-100">
+        <div class="card-body">
+          <div class="small text-muted mb-2">Vista previa</div>
+          <div class="sf-wa">
+            <div class="sf-wa-burbuja">{{ vistaPrevia }}</div>
+          </div>
+          <table class="table table-sm small mt-3 mb-0">
+            @for (v of variables; track v.clave) {
+              <tr><td><code>{{ v.clave }}</code></td><td class="text-muted">{{ v.desc }}</td></tr>
+            }
+          </table>
+        </div>
+      </div>
+    </div>
+  </form>
+}
+
+<!-- ================= Consecutivos ================= -->
+@if (pestana() === 'consecutivos') {
+  <div class="row g-3">
+    @for (s of secuencias; track s.tipo) {
+      <div class="col-md-6">
+        <div class="card h-100">
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-start mb-3">
+              <div>
+                <h5 class="mb-0">{{ s.nombre }}</h5>
+                <div class="small text-muted">Último número usado: {{ s.ultimo }}</div>
+              </div>
+              <div class="text-end">
+                <div class="small text-muted">La próxima será</div>
+                <div class="fs-4 fw-semibold text-gold">{{ ejemplo(s) }}</div>
+              </div>
+            </div>
+            <div class="row g-2">
+              <div class="col-4">
+                <label class="form-label small">Prefijo</label>
+                <input class="form-control text-uppercase" [(ngModel)]="s.prefijo" maxlength="6" />
+              </div>
+              <div class="col-4">
+                <label class="form-label small">Próximo número</label>
+                <input class="form-control" appNumero [(ngModel)]="s.siguiente" />
+              </div>
+              <div class="col-4">
+                <label class="form-label small">Dígitos</label>
+                <input class="form-control" appNumero [(ngModel)]="s.longitud" />
+              </div>
+            </div>
+            <p class="small text-muted mt-2 mb-3">
+              Útil si ya venías facturando en papel: pon aquí el número con el que debe seguir.
+            </p>
+            <button class="btn btn-outline-dark w-100" (click)="guardarSecuencia(s)">Guardar consecutivo</button>
+          </div>
+        </div>
+      </div>
+    }
+  </div>
+}
+
+<!-- ================= Categorías ================= -->
+@if (pestana() === 'categorias') {
+  <div class="row g-3">
+    @for (bloque of [
+      { tipo: 'prod', titulo: 'Categorías de productos', lista: categoriasProd, ph: 'Ej: Enterizos' },
+      { tipo: 'gasto', titulo: 'Categorías de gastos', lista: categoriasGasto, ph: 'Ej: Fotografía' }
+    ]; track bloque.tipo) {
+      <div class="col-lg-6">
+        <div class="card h-100">
+          <div class="card-header bg-white fw-semibold">{{ bloque.titulo }}</div>
+          <ul class="list-group list-group-flush">
+            @for (c of bloque.lista; track c.id) {
+              <li class="list-group-item d-flex align-items-center gap-2" [class.opacity-50]="!c.activo">
+                @if (c.editando) {
+                  <input class="form-control form-control-sm" [(ngModel)]="c.nuevoNombre" (keydown.enter)="renombrar($any(bloque.tipo), c)" />
+                  <button class="btn btn-sm btn-primary" (click)="renombrar($any(bloque.tipo), c)"><i class="bi bi-check2"></i></button>
+                } @else {
+                  <span class="me-auto">{{ c.nombre }}</span>
+                  <button class="btn btn-sm btn-light" title="Renombrar" (click)="c.editando = true; c.nuevoNombre = c.nombre"><i class="bi bi-pencil"></i></button>
+                  <button class="btn btn-sm btn-light" [title]="c.activo ? 'Desactivar' : 'Activar'" (click)="alternarCategoria($any(bloque.tipo), c)">
+                    <i class="bi" [class.bi-toggle-on]="c.activo" [class.text-success]="c.activo" [class.bi-toggle-off]="!c.activo"></i>
+                  </button>
+                }
+              </li>
+            }
+          </ul>
+          <div class="card-footer bg-white">
+            <div class="input-group">
+              @if (bloque.tipo === 'prod') {
+                <input class="form-control" [placeholder]="bloque.ph" [(ngModel)]="nuevaProd" (keydown.enter)="agregarCategoria('prod')" />
+              } @else {
+                <input class="form-control" [placeholder]="bloque.ph" [(ngModel)]="nuevaGasto" (keydown.enter)="agregarCategoria('gasto')" />
+              }
+              <button class="btn btn-outline-dark" (click)="agregarCategoria($any(bloque.tipo))"><i class="bi bi-plus-lg"></i> Agregar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    }
+  </div>
+}
+
+<!-- ================= Seguridad ================= -->
+@if (pestana() === 'seguridad') {
+  <form class="card" style="max-width: 460px" (ngSubmit)="cambiarClave()">
+    <div class="card-body">
+      <h5>Cambiar contraseña</h5>
+      <div class="mb-3">
+        <label class="form-label">Nueva contraseña</label>
+        <input class="form-control" type="password" name="nueva" [(ngModel)]="clave.nueva" autocomplete="new-password" />
+        <div class="form-text">Mínimo 8 caracteres.</div>
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Confirmar contraseña</label>
+        <input class="form-control" type="password" name="confirmar" [(ngModel)]="clave.confirmar" autocomplete="new-password" />
+      </div>
+      <button class="btn btn-primary" [disabled]="guardando()">Actualizar contraseña</button>
+    </div>
+  </form>
+}

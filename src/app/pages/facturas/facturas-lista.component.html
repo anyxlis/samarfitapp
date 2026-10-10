@@ -1,0 +1,91 @@
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+  <h2 class="mb-0 me-auto">{{ cfg.plural }}</h2>
+  <app-btn-pdf (generar)="exportarPdf()" [disabled]="!filtradas().length" />
+  <a class="btn btn-primary" [routerLink]="[cfg.ruta, 'nueva']"><i class="bi bi-plus-lg me-1"></i>Nueva factura</a>
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-6 col-lg-3"><div class="sf-kpi"><div class="lbl"><i class="bi bi-receipt me-1"></i>Facturas</div><div class="val">{{ kpis().cantidad }}</div></div></div>
+  <div class="col-6 col-lg-3"><div class="sf-kpi"><div class="lbl"><i class="bi bi-cash-stack me-1"></i>Total {{ esCompra ? 'comprado' : 'vendido' }}</div><div class="val">{{ kpis().total | cop }}</div></div></div>
+  <div class="col-6 col-lg-3"><div class="sf-kpi"><div class="lbl"><i class="bi bi-check2-circle me-1"></i>{{ esCompra ? 'Pagado' : 'Cobrado' }}</div><div class="val">{{ kpis().pagado | cop }}</div></div></div>
+  <div class="col-6 col-lg-3"><div class="sf-kpi"><div class="lbl"><i class="bi bi-hourglass-split me-1"></i>{{ esCompra ? 'Por pagar' : 'Por cobrar' }}</div>
+    <div class="val" [class.text-danger]="kpis().saldo > 0">{{ kpis().saldo | cop }}</div></div></div>
+</div>
+
+<div class="card">
+  <div class="card-body border-bottom">
+    <div class="row g-2 align-items-end">
+      <div class="col-md-3">
+        <div class="input-group">
+          <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
+          <input class="form-control" [placeholder]="'Número o ' + cfg.tercero.toLowerCase() + '…'" [value]="busqueda()" (input)="busqueda.set($any($event.target).value)" />
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <select class="form-select" [value]="estado()" (change)="estado.set($any($event.target).value)">
+          <option value="">Todos los estados</option>
+          @for (e of ['pendiente', 'parcial', 'pagada', 'anulada']; track e) { <option [value]="e">{{ estados[e].texto }}</option> }
+        </select>
+      </div>
+      <div class="col-6 col-md-2">
+        <select class="form-select" [ngModel]="periodo" (ngModelChange)="aplicarPeriodo($event)">
+          <option value="mes">Este mes</option>
+          <option value="mes_anterior">Mes anterior</option>
+          <option value="anio">Este año</option>
+          <option value="todo">Todo</option>
+          <option value="personalizado">Personalizado</option>
+        </select>
+      </div>
+      @if (periodo === 'personalizado') {
+        <div class="col-6 col-md-2"><input class="form-control" type="date" [(ngModel)]="desde" (change)="cargar()" title="Desde" /></div>
+        <div class="col-6 col-md-2"><input class="form-control" type="date" [(ngModel)]="hasta" (change)="cargar()" title="Hasta" /></div>
+      } @else {
+        <div class="col-md-4 small text-muted pb-2">{{ textoPeriodo }}</div>
+      }
+    </div>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>Número</th>
+          <th class="d-none d-sm-table-cell">Fecha</th>
+          <th>{{ cfg.tercero }}</th>
+          <th class="d-none d-lg-table-cell">Pago</th>
+          <th class="text-end">Total</th>
+          <th class="text-end d-none d-md-table-cell">Saldo</th>
+          <th class="text-center">Estado</th>
+        </tr>
+      </thead>
+      <tbody>
+        @if (cargando()) {
+          <tr><td colspan="7" class="text-center py-5"><span class="spinner-border spinner-border-sm text-secondary"></span></td></tr>
+        } @else {
+          @for (f of filtradas(); track f.id) {
+            <tr role="button" [routerLink]="[cfg.ruta, f.id]" [class.opacity-50]="f.estado === 'anulada'">
+              <td class="fw-semibold">{{ f.numero }}
+                @if (f.numero_proveedor) { <div class="small text-muted fw-normal">Ref. {{ f.numero_proveedor }}</div> }
+              </td>
+              <td class="d-none d-sm-table-cell">{{ fechaCorta(f.fecha) }}</td>
+              <td>{{ f.tercero.nombre }}<div class="small text-muted d-sm-none">{{ fechaCorta(f.fecha) }}</div></td>
+              <td class="d-none d-lg-table-cell">
+                {{ f.forma_pago === 'credito' ? 'Crédito' : 'Contado' }}
+                @if (f.fecha_vencimiento) { <div class="small" [class.text-danger]="vencida(f)" [class.text-muted]="!vencida(f)">vence {{ fechaCorta(f.fecha_vencimiento) }}</div> }
+              </td>
+              <td class="text-end fw-semibold">{{ f.total | cop }}</td>
+              <td class="text-end d-none d-md-table-cell" [class.text-danger]="f.total - f.pagado > 0 && f.estado !== 'anulada'">
+                {{ f.estado === 'anulada' ? '—' : (f.total - f.pagado | cop) }}
+              </td>
+              <td class="text-center"><span class="badge {{ estados[f.estado].clase }}">{{ estados[f.estado].texto }}</span></td>
+            </tr>
+          } @empty {
+            <tr><td colspan="7" class="text-center text-muted py-5">
+              <i class="bi bi-receipt fs-3 d-block mb-1"></i>No hay facturas en este periodo.
+            </td></tr>
+          }
+        }
+      </tbody>
+    </table>
+  </div>
+</div>

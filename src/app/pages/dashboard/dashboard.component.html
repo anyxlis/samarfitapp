@@ -1,0 +1,202 @@
+<!-- Encabezado -->
+<div class="d-flex flex-wrap align-items-end gap-3 mb-3">
+  <div class="me-auto">
+    <div class="small text-muted">{{ saludo() }} 👋</div>
+    <h2 class="mb-0">Resumen del negocio</h2>
+  </div>
+  <div class="btn-group">
+    @for (p of [{ id: 'mes', t: 'Este mes' }, { id: 'mes_anterior', t: 'Mes anterior' }, { id: 'anio', t: 'Este año' }]; track p.id) {
+      <button class="btn btn-sm" [class.btn-dark]="periodo() === p.id" [class.btn-outline-dark]="periodo() !== p.id"
+              (click)="cambiarPeriodo($any(p.id))">{{ p.t }}</button>
+    }
+  </div>
+</div>
+
+<!-- Accesos rápidos -->
+<div class="sf-accesos mb-3">
+  <a routerLink="/facturas-venta/nueva" class="sf-acceso"><i class="bi bi-receipt"></i><span>Nueva venta</span></a>
+  <a routerLink="/facturas-compra/nueva" class="sf-acceso"><i class="bi bi-bag-plus"></i><span>Nueva compra</span></a>
+  <a routerLink="/gastos" class="sf-acceso"><i class="bi bi-credit-card-2-front"></i><span>Registrar gasto</span></a>
+  <a routerLink="/inventario" class="sf-acceso"><i class="bi bi-box-seam"></i><span>Inventario</span></a>
+  <a routerLink="/cartera-cobrar" class="sf-acceso"><i class="bi bi-whatsapp"></i><span>Cobrar</span></a>
+</div>
+
+@if (cargando()) {
+  <div class="text-center py-5"><span class="spinner-border text-secondary"></span></div>
+} @else {
+  <!-- KPIs -->
+  <div class="row g-3 mb-3">
+    <div class="col-6 col-xl-2">
+      <a routerLink="/facturas-venta" class="sf-kpi d-block text-decoration-none">
+        <div class="lbl"><i class="bi bi-graph-up me-1"></i>Ventas</div>
+        <div class="val">{{ kpi().ventas | cop }}</div>
+        <div class="small text-muted">{{ numVentas() }} facturas</div>
+      </a>
+    </div>
+    <div class="col-6 col-xl-2">
+      <a routerLink="/informes" class="sf-kpi sf-kpi-destacado d-block text-decoration-none">
+        <div class="lbl">Ganancia neta</div>
+        <div class="val" [class.text-danger]="kpi().neta < 0">{{ kpi().neta | cop }}</div>
+        <div class="small">{{ kpi().margen | number: '1.0-0' }}% · bruta {{ kpi().bruta | cop }}</div>
+      </a>
+    </div>
+    <div class="col-6 col-xl-2">
+      <a routerLink="/gastos" class="sf-kpi d-block text-decoration-none">
+        <div class="lbl"><i class="bi bi-credit-card-2-front me-1"></i>Gastos del negocio</div>
+        <div class="val">{{ kpi().gastos | cop }}</div>
+        <div class="small text-muted">publicidad, empaques…</div>
+      </a>
+    </div>
+    <div class="col-6 col-xl-2">
+      <a routerLink="/facturas-compra" class="sf-kpi d-block text-decoration-none">
+        <div class="lbl"><i class="bi bi-bag-check me-1"></i>Compras inventario</div>
+        <div class="val">{{ kpi().compras | cop }}</div>
+        <div class="small text-muted">mercancía para vender</div>
+      </a>
+    </div>
+    <div class="col-6 col-xl-2">
+      <a routerLink="/cartera-cobrar" class="sf-kpi d-block text-decoration-none">
+        <div class="lbl"><i class="bi bi-cash-coin me-1"></i>Te deben</div>
+        <div class="val">{{ totalCobrar().total | cop }}</div>
+        <div class="small" [class.text-danger]="totalCobrar().vencido > 0" [class.text-muted]="!totalCobrar().vencido">vencido {{ totalCobrar().vencido | cop }}</div>
+      </a>
+    </div>
+    <div class="col-6 col-xl-2">
+      <a routerLink="/cartera-pagar" class="sf-kpi d-block text-decoration-none">
+        <div class="lbl"><i class="bi bi-wallet2 me-1"></i>Debes</div>
+        <div class="val">{{ totalPagar().total | cop }}</div>
+        <div class="small" [class.text-danger]="totalPagar().vencido > 0" [class.text-muted]="!totalPagar().vencido">vencido {{ totalPagar().vencido | cop }}</div>
+      </a>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-3">
+    <!-- Gráfico 6 meses -->
+    <div class="col-xl-7">
+      <div class="card h-100">
+        <div class="card-body d-flex flex-column">
+          <div class="d-flex flex-wrap justify-content-between align-items-center mb-2">
+            <span class="fw-semibold">Últimos 6 meses</span>
+            <span class="small text-muted"><span class="sf-ley" style="background: #e9e1cc"></span> Ventas
+              <span class="sf-ley ms-2" style="background: var(--sf-gold)"></span> Ganancia neta</span>
+          </div>
+          <div class="sf-chart flex-grow-1">
+            @for (g of grafico(); track g.etiqueta) {
+              <div class="sf-chart-col" [class.sel]="g.actual" [title]="g.etiqueta + ': ventas ' + (g.ventas | cop) + ' · neta ' + (g.neta | cop)">
+                <div class="small text-center text-muted" style="font-size: .65rem">{{ corto(g.ventas) }}</div>
+                <div class="sf-chart-barras">
+                  <div class="b ventas" [style.height.%]="(g.ventas / maxGrafico()) * 100"></div>
+                  <div class="b neta" [class.neg]="g.neta < 0" [style.height.%]="(Math.abs(g.neta) / maxGrafico()) * 100"></div>
+                </div>
+                <div class="sf-chart-lbl">{{ g.etiqueta }}</div>
+              </div>
+            }
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quién me debe -->
+    <div class="col-xl-5">
+      <div class="card h-100">
+        <div class="card-header bg-white d-flex align-items-center">
+          <span class="fw-semibold me-auto"><i class="bi bi-person-exclamation me-1 text-gold"></i>¿Quién te debe?</span>
+          <a routerLink="/cartera-cobrar" class="small">Ver cartera</a>
+        </div>
+        <ul class="list-group list-group-flush">
+          @for (d of deudores(); track d.id) {
+            <li class="list-group-item d-flex align-items-center gap-2">
+              <div class="me-auto min-w-0">
+                <div class="fw-semibold text-truncate">{{ d.nombre }}</div>
+                <div class="small text-muted">{{ d.facturas }} {{ d.facturas === 1 ? 'factura' : 'facturas' }}</div>
+              </div>
+              <span class="badge {{ claseMora(d.maxMora) }}">{{ d.maxMora > 0 ? d.maxMora + ' d mora' : 'Al día' }}</span>
+              <span class="fw-semibold text-nowrap">{{ d.saldo | cop }}</span>
+              @if (d.telefono) {
+                <a class="btn btn-sm btn-outline-success" [href]="linkWhatsapp(d.telefono)" target="_blank" title="WhatsApp"><i class="bi bi-whatsapp"></i></a>
+              }
+            </li>
+          } @empty {
+            <li class="list-group-item text-center text-muted py-4"><i class="bi bi-emoji-smile d-block fs-4"></i>Nadie te debe. ¡Excelente!</li>
+          }
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-3">
+    <!-- Lo más vendido -->
+    <div class="col-lg-6 col-xl-4">
+      <div class="card h-100">
+        <div class="card-header bg-white d-flex align-items-center">
+          <span class="fw-semibold me-auto"><i class="bi bi-trophy me-1 text-gold"></i>Lo más vendido</span>
+          <span class="small text-muted">{{ textoPeriodo }}</span>
+        </div>
+        <div class="card-body">
+          @for (t of top(); track t.nombre; let i = $index) {
+            <div class="d-flex align-items-center gap-2 mb-2">
+              <span class="sf-pos" [class.top]="i < 3">{{ i + 1 }}</span>
+              <div class="flex-grow-1 min-w-0">
+                <div class="d-flex justify-content-between small">
+                  <span class="fw-semibold text-truncate">{{ t.nombre }}</span><span class="text-nowrap ms-2">{{ t.unidades }} und.</span>
+                </div>
+                <div class="progress" style="height: 6px"><div class="progress-bar" style="background: var(--sf-gold)" [style.width.%]="(t.unidades / maxTop()) * 100"></div></div>
+              </div>
+            </div>
+          } @empty {
+            <div class="text-center text-muted small py-4">Aún no hay ventas en este periodo.</div>
+          }
+        </div>
+      </div>
+    </div>
+
+    <!-- Próximos cobros -->
+    <div class="col-lg-6 col-xl-4">
+      <div class="card h-100">
+        <div class="card-header bg-white">
+          <span class="fw-semibold"><i class="bi bi-calendar-event me-1 text-gold"></i>Próximos cobros</span>
+          <span class="small text-muted"> · 15 días</span>
+        </div>
+        <ul class="list-group list-group-flush">
+          @for (c of proximos(); track c.factura_id) {
+            <a class="list-group-item list-group-item-action d-flex align-items-center gap-2" [routerLink]="['/facturas-venta', c.factura_id]">
+              <div class="sf-fecha"><b>{{ c.fecha_vencimiento.slice(8, 10) }}</b><span>{{ fechaCorta(c.fecha_vencimiento).slice(3, 5) }}</span></div>
+              <div class="me-auto min-w-0">
+                <div class="fw-semibold text-truncate">{{ c.cliente }}</div>
+                <div class="small text-muted">{{ c.numero }} · {{ c.dias === 0 ? 'vence hoy' : 'en ' + c.dias + (c.dias === 1 ? ' día' : ' días') }}</div>
+              </div>
+              <span class="fw-semibold text-nowrap">{{ c.saldo | cop }}</span>
+            </a>
+          } @empty {
+            <li class="list-group-item text-center text-muted small py-4">No hay cobros por vencer en los próximos 15 días.</li>
+          }
+        </ul>
+      </div>
+    </div>
+
+    <!-- Por agotarse -->
+    <div class="col-lg-12 col-xl-4">
+      <div class="card h-100">
+        <div class="card-header bg-white d-flex align-items-center">
+          <span class="fw-semibold me-auto"><i class="bi bi-exclamation-triangle me-1 text-gold"></i>Por agotarse</span>
+          <a routerLink="/inventario" class="small">Ver inventario</a>
+        </div>
+        <ul class="list-group list-group-flush">
+          @for (b of bajos(); track b.id) {
+            <li class="list-group-item d-flex align-items-center gap-2">
+              <div class="me-auto min-w-0">
+                <div class="fw-semibold text-truncate">{{ b.nombre }}</div>
+                <div class="small text-muted">{{ b.detalle }}</div>
+              </div>
+              <span class="badge rounded-pill" [class.text-bg-danger]="b.stock === 0" [class.text-bg-warning]="b.stock > 0">
+                {{ b.stock === 0 ? 'Agotado' : b.stock + ' und.' }}
+              </span>
+            </li>
+          } @empty {
+            <li class="list-group-item text-center text-muted small py-4">Todo el inventario está bien surtido.</li>
+          }
+        </ul>
+      </div>
+    </div>
+  </div>
+}

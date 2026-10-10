@@ -1,0 +1,445 @@
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+  <h2 class="mb-0 me-auto">Informes</h2>
+  <app-btn-pdf (generar)="exportarPdf()" />
+</div>
+
+<ul class="nav nav-pills sf-tabs flex-nowrap overflow-auto mb-3">
+  @for (t of [
+    { id: 'resultados', txt: 'Ganancias por mes', ico: 'graph-up-arrow' },
+    { id: 'estado', txt: 'Estado de resultados', ico: 'journal-text' },
+    { id: 'balance', txt: 'Balance total', ico: 'clipboard-data' },
+    { id: 'inicial', txt: 'Inventario inicial', ico: 'box-seam' },
+    { id: 'productos', txt: 'Lo más vendido', ico: 'trophy' },
+    { id: 'clientes', txt: 'Ventas por cliente', ico: 'people' },
+    { id: 'proveedores', txt: 'Compras por proveedor', ico: 'truck' }
+  ]; track t.id) {
+    <li class="nav-item">
+      <button class="nav-link text-nowrap" [class.active]="pestana() === t.id" (click)="cambiarPestana($any(t.id))">
+        <i class="bi bi-{{ t.ico }} me-1"></i>{{ t.txt }}
+      </button>
+    </li>
+  }
+</ul>
+
+<!-- ======================= GANANCIAS POR MES ======================= -->
+@if (pestana() === 'resultados') {
+  <div class="d-flex align-items-center gap-2 mb-3">
+    <label class="small text-muted">Año</label>
+    <select class="form-select w-auto" [(ngModel)]="anio" (ngModelChange)="cargarResultados()">
+      @for (a of anios; track a) { <option [ngValue]="a">{{ a }}</option> }
+    </select>
+    @if (cargando()) { <span class="spinner-border spinner-border-sm text-secondary"></span> }
+  </div>
+
+  <!-- KPIs del año -->
+  <div class="row g-3 mb-3">
+    <div class="col-6 col-lg"><div class="sf-kpi"><div class="lbl">Ventas netas {{ anio }}</div><div class="val">{{ totalAnio().ventas_netas | cop }}</div></div></div>
+    <div class="col-6 col-lg"><div class="sf-kpi"><div class="lbl">Ganancia bruta</div><div class="val">{{ totalAnio().utilidad_bruta | cop }}</div>
+      <div class="small text-muted">{{ margen(totalAnio().utilidad_bruta, totalAnio().ventas_netas) | number: '1.0-1' }}% de las ventas</div></div></div>
+    <div class="col-6 col-lg"><div class="sf-kpi"><div class="lbl">Gastos del negocio</div><div class="val">{{ totalAnio().gastos_operativos | cop }}</div></div></div>
+    <div class="col-6 col-lg"><div class="sf-kpi"><div class="lbl" title="Ventas netas - compras de inventario - gastos">Balance total (todo incluido)</div>
+      <div class="val" [class.text-danger]="totalAnio().balance < 0">{{ totalAnio().balance | cop }}</div>
+      <div class="small text-muted">incluye {{ totalAnio().compras_inventario | cop }} en mercancía</div></div></div>
+    <div class="col-12 col-lg"><div class="sf-kpi sf-kpi-destacado"><div class="lbl">Ganancia neta</div>
+      <div class="val" [class.text-danger]="totalAnio().utilidad_neta < 0">{{ totalAnio().utilidad_neta | cop }}</div>
+      <div class="small text-muted">{{ margen(totalAnio().utilidad_neta, totalAnio().ventas_netas) | number: '1.0-1' }}% de las ventas</div></div></div>
+  </div>
+
+  <div class="row g-3 mb-3">
+    <div class="col-12">
+      <!-- Gráfico ventas vs ganancia neta -->
+      <div class="card h-100">
+        <div class="card-body d-flex flex-column">
+          <div class="d-flex flex-wrap justify-content-between align-items-center mb-2">
+            <span class="fw-semibold">Ventas y ganancia neta por mes</span>
+            <span class="small text-muted"><span class="sf-ley" style="background: #e9e1cc"></span> Ventas netas
+              <span class="sf-ley ms-2" style="background: var(--sf-gold)"></span> Ganancia neta
+              <span class="sf-ley ms-2" style="background: #d9534f"></span> Pérdida</span>
+          </div>
+          <div class="sf-chart flex-grow-1">
+            @for (m of meses(); track m.mes) {
+              <div class="sf-chart-col" role="button" [class.sel]="m.mes === mesSel()" (click)="verEstado(m.mes)"
+                   [title]="nombreMes(m.mes) + ': ventas ' + (m.ventas_netas | cop) + ' · neta ' + (m.utilidad_neta | cop)">
+                <div class="sf-chart-barras">
+                  <div class="b ventas" [style.height.%]="(m.ventas_netas / maxGrafico()) * 100"></div>
+                  <div class="b neta" [class.neg]="m.utilidad_neta < 0" [style.height.%]="(Math.abs(m.utilidad_neta) / maxGrafico()) * 100"></div>
+                </div>
+                <div class="sf-chart-lbl">{{ nombreMes(m.mes, true) }}</div>
+              </div>
+            }
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+      <!-- Tabla mensual -->
+      <div class="card">
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0 small text-nowrap">
+            <thead class="table-light">
+              <tr>
+                <th>Mes</th><th class="text-end">Ventas netas</th><th class="text-end d-none d-md-table-cell">Costo ventas</th>
+                <th class="text-end">G. bruta</th><th class="text-end d-none d-md-table-cell">Gastos</th><th class="text-end">G. neta</th>
+                <th class="text-end d-none d-xxl-table-cell">Margen</th><th class="text-end d-none d-xxl-table-cell">Compras inv.</th>
+                <th class="text-end" title="Ventas netas - compras de inventario - gastos">Balance total</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (m of meses(); track m.mes) {
+                <tr role="button" title="Ver estado de resultados del mes" [class.table-warning]="m.mes === mesSel()" (click)="verEstado(m.mes)">
+                  <td class="fw-semibold">{{ nombreMes(m.mes) }}</td>
+                  <td class="text-end">{{ m.ventas_netas | cop }}</td>
+                  <td class="text-end d-none d-md-table-cell text-muted">{{ m.costo_ventas | cop }}</td>
+                  <td class="text-end">{{ m.utilidad_bruta | cop }}</td>
+                  <td class="text-end d-none d-md-table-cell text-muted">{{ m.gastos_operativos | cop }}</td>
+                  <td class="text-end fw-semibold" [class.text-danger]="m.utilidad_neta < 0" [class.text-success]="m.utilidad_neta > 0">{{ m.utilidad_neta | cop }}</td>
+                  <td class="text-end d-none d-xxl-table-cell">{{ margen(m.utilidad_neta, m.ventas_netas) | number: '1.0-1' }}%</td>
+                  <td class="text-end d-none d-xxl-table-cell text-muted">{{ m.compras_inventario | cop }}</td>
+                  <td class="text-end fw-semibold" [class.text-danger]="m.balance < 0">{{ m.balance | cop }}</td>
+                </tr>
+              }
+            </tbody>
+            <tfoot class="table-light fw-semibold">
+              <tr>
+                <td>Total</td><td class="text-end">{{ totalAnio().ventas_netas | cop }}</td>
+                <td class="text-end d-none d-md-table-cell">{{ totalAnio().costo_ventas | cop }}</td>
+                <td class="text-end">{{ totalAnio().utilidad_bruta | cop }}</td>
+                <td class="text-end d-none d-md-table-cell">{{ totalAnio().gastos_operativos | cop }}</td>
+                <td class="text-end" [class.text-danger]="totalAnio().utilidad_neta < 0">{{ totalAnio().utilidad_neta | cop }}</td>
+                <td class="text-end d-none d-xxl-table-cell">{{ margen(totalAnio().utilidad_neta, totalAnio().ventas_netas) | number: '1.0-1' }}%</td>
+                <td class="text-end d-none d-xxl-table-cell">{{ totalAnio().compras_inventario | cop }}</td>
+                <td class="text-end" [class.text-danger]="totalAnio().balance < 0">{{ totalAnio().balance | cop }}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+
+}
+
+<!-- ======================= ESTADO DE RESULTADOS / BALANCE TOTAL ======================= -->
+@if (pestana() === 'estado' || pestana() === 'balance') {
+  <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+    <select class="form-select w-auto" [(ngModel)]="anio" (ngModelChange)="cargarResultados()">
+      @for (a of anios; track a) { <option [ngValue]="a">{{ a }}</option> }
+    </select>
+    <select class="form-select w-auto" [ngModel]="mesSel()" (ngModelChange)="seleccionarMes($event)">
+      @for (m of meses(); track m.mes) { <option [value]="m.mes">{{ nombreMes(m.mes) }}</option> }
+    </select>
+    @if (cargando()) { <span class="spinner-border spinner-border-sm text-secondary"></span> }
+  </div>
+
+  @if (detalleMes(); as d) {
+    @if (pestana() === 'estado') {
+      <!-- Indicadores del mes -->
+      <div class="row g-3 mb-3">
+        <div class="col-6 col-xl-3"><div class="sf-kpi"><div class="lbl">Ventas netas</div><div class="val">{{ d.ventas_netas | cop }}</div><div class="small text-muted">lo que facturaste</div></div></div>
+        <div class="col-6 col-xl-3"><div class="sf-kpi"><div class="lbl">Ganancia bruta</div><div class="val">{{ d.utilidad_bruta | cop }}</div><div class="small text-muted">{{ margen(d.utilidad_bruta, d.ventas_netas) | number: '1.0-0' }}% · antes de gastos</div></div></div>
+        <div class="col-6 col-xl-3"><div class="sf-kpi"><div class="lbl">Gastos del negocio</div><div class="val">{{ d.gastos_operativos | cop }}</div><div class="small text-muted">{{ margen(d.gastos_operativos, d.ventas_netas) | number: '1.0-0' }}% de las ventas</div></div></div>
+        <div class="col-6 col-xl-3"><div class="sf-kpi sf-kpi-destacado"><div class="lbl">Ganancia neta</div><div class="val" [class.text-danger]="d.utilidad_neta < 0">{{ d.utilidad_neta | cop }}</div><div class="small">{{ margen(d.utilidad_neta, d.ventas_netas) | number: '1.0-0' }}% · lo que de verdad ganaste</div></div></div>
+      </div>
+
+      <div class="row g-3">
+        <!-- Estado de resultados -->
+        <div class="col-xl-7">
+          <div class="card h-100">
+            <div class="card-body p-4">
+              <div class="d-flex flex-wrap justify-content-between align-items-end mb-3">
+                <div>
+                  <div class="small text-muted text-uppercase">Estado de resultados</div>
+                  <h3 class="mb-0">{{ nombreMes(d.mes) }}</h3>
+                </div>
+                <div class="small text-muted">¿Cuánto gané con lo que vendí este mes?</div>
+              </div>
+              <div class="sf-er sf-er-3">
+                <div class="f cab"><span>Concepto</span><span>Valor</span><span>% ventas</span></div>
+                <div class="f"><span>Ventas brutas<small>{{ EXPLICA.ventasBrutas }}</small></span><span>{{ d.ventas_brutas | cop }}</span><span></span></div>
+                <div class="f text-danger"><span>(−) Descuentos<small>{{ EXPLICA.descuentos }}</small></span><span>{{ d.descuentos | cop }}</span><span></span></div>
+                <div class="f sub"><span>= Ventas netas<small>{{ EXPLICA.ventasNetas }}</small></span><span>{{ d.ventas_netas | cop }}</span><span>100%</span></div>
+                <div class="f text-danger"><span>(−) Costo de lo vendido<small>{{ EXPLICA.costoVendido }}</small></span><span>{{ d.costo_ventas | cop }}</span><span>{{ margen(d.costo_ventas, d.ventas_netas) | number: '1.0-1' }}%</span></div>
+                <div class="f total"><span>= GANANCIA BRUTA<small>{{ EXPLICA.gananciaBruta }}</small></span><span>{{ d.utilidad_bruta | cop }}</span><span>{{ margen(d.utilidad_bruta, d.ventas_netas) | number: '1.0-1' }}%</span></div>
+                @for (g of gastosMes(); track g.nombre) {
+                  <div class="f gasto"><span>(−) {{ g.nombre }}</span><span>{{ g.valor | cop }}</span><span>{{ margen(g.valor, d.ventas_netas) | number: '1.0-1' }}%</span></div>
+                }
+                <div class="f text-danger"><span>(−) Total gastos del negocio<small>{{ EXPLICA.gastos }}</small></span><span>{{ d.gastos_operativos | cop }}</span><span>{{ margen(d.gastos_operativos, d.ventas_netas) | number: '1.0-1' }}%</span></div>
+                <div class="f total final" [class.neg]="d.utilidad_neta < 0"><span>= GANANCIA NETA<small>{{ EXPLICA.gananciaNeta }}</small></span><span>{{ d.utilidad_neta | cop }}</span><span>{{ margen(d.utilidad_neta, d.ventas_netas) | number: '1.0-1' }}%</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Explicación -->
+        <div class="col-xl-5 d-flex flex-column gap-3">
+          <div class="sf-resumen"><div class="t">En pocas palabras</div>{{ resumenEstado(d) }}</div>
+
+          @if (d.ventas_netas > 0) {
+            <div class="card">
+              <div class="card-body">
+                <div class="fw-semibold mb-2">De cada $100 que vendiste…</div>
+                <div class="sf-barra100">
+                  <div class="seg costo" [style.width.%]="Math.max(0, margen(d.costo_ventas, d.ventas_netas))"></div>
+                  <div class="seg gasto" [style.width.%]="Math.max(0, Math.min(100, margen(d.gastos_operativos, d.ventas_netas)))"></div>
+                  <div class="seg ganancia" [style.width.%]="Math.max(0, margen(d.utilidad_neta, d.ventas_netas))"></div>
+                </div>
+                <div class="sf-leyenda100 mt-2">
+                  <div><span class="sf-ley" style="background: #cdbf9c"></span>${{ margen(d.costo_ventas, d.ventas_netas) | number: '1.0-0' }} pagaron las prendas vendidas</div>
+                  <div><span class="sf-ley" style="background: #e59a8f"></span>${{ margen(d.gastos_operativos, d.ventas_netas) | number: '1.0-0' }} se fueron en gastos del negocio</div>
+                  <div class="fw-semibold" [class.text-danger]="d.utilidad_neta < 0"><span class="sf-ley" style="background: var(--sf-gold)"></span>
+                    ${{ margen(d.utilidad_neta, d.ventas_netas) | number: '1.0-0' }} {{ d.utilidad_neta >= 0 ? 'te quedaron de ganancia' : 'de pérdida' }}</div>
+                </div>
+              </div>
+            </div>
+          }
+
+          <div class="card">
+            <div class="card-body sf-ayuda">
+              <div><i class="bi bi-percent"></i><span><b>¿Qué es la columna "% ventas"?</b> Cuánto representa cada valor de cada $100 vendidos.</span></div>
+              <div><i class="bi bi-box-seam"></i><span><b>¿Por qué no aparecen las compras de inventario ({{ d.compras_inventario | cop }})?</b>
+                Porque la mercancía que compras sigue siendo tuya hasta que la vendes. Aquí solo se resta lo que costaron las prendas que sí vendiste.
+                Para ver todo lo que salió, mira el <a role="button" class="link-dark fw-semibold" (click)="cambiarPestana('balance')">Balance total</a>.</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    } @else {
+      <!-- Indicadores del mes -->
+      <div class="row g-3 mb-3">
+        <div class="col-6 col-xl-3"><div class="sf-kpi"><div class="lbl"><i class="bi bi-arrow-down-circle me-1"></i>Entró por ventas</div><div class="val">{{ d.ventas_netas | cop }}</div></div></div>
+        <div class="col-6 col-xl-3"><div class="sf-kpi"><div class="lbl"><i class="bi bi-bag me-1"></i>Salió en mercancía</div><div class="val">{{ d.compras_inventario | cop }}</div></div></div>
+        <div class="col-6 col-xl-3"><div class="sf-kpi"><div class="lbl"><i class="bi bi-credit-card-2-front me-1"></i>Salió en gastos</div><div class="val">{{ d.gastos_operativos | cop }}</div></div></div>
+        <div class="col-6 col-xl-3"><div class="sf-kpi sf-kpi-destacado"><div class="lbl">Balance total</div><div class="val" [class.text-danger]="d.balance < 0">{{ d.balance | cop }}</div><div class="small">{{ d.balance >= 0 ? 'a favor' : 'salió más de lo que entró' }}</div></div></div>
+      </div>
+
+      <div class="row g-3">
+        <div class="col-xl-7">
+          <div class="card h-100">
+            <div class="card-body p-4">
+              <div class="d-flex flex-wrap justify-content-between align-items-end mb-3">
+                <div>
+                  <div class="small text-muted text-uppercase">Balance total · todo incluido</div>
+                  <h3 class="mb-0">{{ nombreMes(d.mes) }}</h3>
+                </div>
+                <div class="small text-muted">¿Entró más plata de la que salió este mes?</div>
+              </div>
+              <div class="sf-er">
+                <div class="f cab"><span>Concepto</span><span>Valor</span></div>
+                <div class="f sub"><span>Ventas netas<small>{{ EXPLICA.ventasNetasBal }}</small></span><span>{{ d.ventas_netas | cop }}</span></div>
+                <div class="f text-danger"><span>(−) Compras de inventario<small>{{ EXPLICA.compras }}</small></span><span>{{ d.compras_inventario | cop }}</span></div>
+                @for (g of gastosMes(); track g.nombre) {
+                  <div class="f gasto"><span>(−) {{ g.nombre }}</span><span>{{ g.valor | cop }}</span></div>
+                }
+                <div class="f text-danger"><span>(−) Total gastos del negocio<small>{{ EXPLICA.gastos }}</small></span><span>{{ d.gastos_operativos | cop }}</span></div>
+                <div class="f total final" [class.neg]="d.balance < 0"><span>= BALANCE TOTAL<small>{{ EXPLICA.balance }}</small></span><span>{{ d.balance | cop }}</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-xl-5 d-flex flex-column gap-3">
+          <div class="sf-resumen" [class.neg]="d.balance < 0"><div class="t">En pocas palabras</div>{{ resumenBalance(d) }}</div>
+
+          <div class="card">
+            <div class="card-body">
+              <div class="fw-semibold mb-2">Lo que entró vs. lo que salió</div>
+              @for (fila of [
+                { t: 'Entró', v: d.ventas_netas, partes: [{ v: d.ventas_netas, c: 'ganancia' }] },
+                { t: 'Salió', v: d.compras_inventario + d.gastos_operativos, partes: [{ v: d.compras_inventario, c: 'costo' }, { v: d.gastos_operativos, c: 'gasto' }] }
+              ]; track fila.t) {
+                <div class="d-flex align-items-center gap-2 mb-2">
+                  <span class="small text-muted" style="width: 42px">{{ fila.t }}</span>
+                  <div class="sf-barra100 flex-grow-1">
+                    @for (pt of fila.partes; track pt.c) {
+                      <div class="seg {{ pt.c }}" [style.width.%]="(pt.v / Math.max(1, d.ventas_netas, d.compras_inventario + d.gastos_operativos)) * 100"></div>
+                    }
+                  </div>
+                  <span class="small fw-semibold text-end" style="width: 95px">{{ fila.v | cop }}</span>
+                </div>
+              }
+              <div class="sf-leyenda100 mt-2">
+                <div><span class="sf-ley" style="background: var(--sf-gold)"></span>Ventas</div>
+                <div><span class="sf-ley" style="background: #cdbf9c"></span>Mercancía comprada</div>
+                <div><span class="sf-ley" style="background: #e59a8f"></span>Gastos del negocio</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-body sf-ayuda">
+              <div><i class="bi bi-arrow-left-right"></i><span><b>¿Por qué es distinto a la ganancia neta ({{ d.utilidad_neta | cop }})?</b>
+                La ganancia neta solo resta lo que costaron las prendas vendidas ({{ d.costo_ventas | cop }}). Este balance resta toda la mercancía que compraste ({{ d.compras_inventario | cop }}).
+                @if (quedoEnInventario(d) >= 0) {
+                  La diferencia, <b>{{ quedoEnInventario(d) | cop }}</b>, es mercancía que quedó en tu inventario para vender después: no es plata perdida.
+                } @else {
+                  Ese mes también vendiste prendas que ya tenías de meses anteriores (<b>{{ -quedoEnInventario(d) | cop }}</b> a costo).
+                }
+              </span></div>
+              <div><i class="bi bi-lightbulb"></i><span><b>¿Para qué sirve?</b> Para saber si el negocio se está pagando solo con lo que vende o si
+                estás poniendo plata de tu bolsillo para surtir. Mira la <a role="button" class="link-dark fw-semibold" (click)="cambiarPestana('estado')">ganancia real en el Estado de resultados</a>.</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    }
+  }
+}
+
+<!-- ======================= INVENTARIO INICIAL ======================= -->
+@if (pestana() === 'inicial') {
+  <div class="row g-3 mb-3">
+    <div class="col-6 col-lg-4"><div class="sf-kpi"><div class="lbl"><i class="bi bi-box-seam me-1"></i>Unidades iniciales</div><div class="val">{{ totInicial().unidades | number }}</div></div></div>
+    <div class="col-6 col-lg-4"><div class="sf-kpi sf-kpi-destacado"><div class="lbl">Inversión inicial (al costo)</div><div class="val">{{ totInicial().costo | cop }}</div></div></div>
+    <div class="col-12 col-lg-4"><div class="sf-kpi"><div class="lbl">Valor a precio de venta</div><div class="val">{{ totInicial().venta | cop }}</div>
+      <div class="small text-muted">lo que vale si se vende todo</div></div></div>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-xl-8">
+      <div class="card">
+        <div class="table-responsive">
+          <table class="table align-middle mb-0 small">
+            <thead class="table-light">
+              <tr><th>Producto</th><th class="d-none d-md-table-cell">Talla · Color · Código</th><th class="text-end">Unid.</th>
+                <th class="text-end d-none d-sm-table-cell">Costo u.</th><th class="text-end">Valor</th></tr>
+            </thead>
+            <tbody>
+              @if (cargando()) {
+                <tr><td colspan="5" class="text-center py-5"><span class="spinner-border spinner-border-sm text-secondary"></span></td></tr>
+              } @else {
+                @for (i of inicial(); track i.clave) {
+                  <tr>
+                    <td><div class="fw-semibold">{{ i.nombre }}</div><div class="small text-muted">{{ i.categoria }}<span class="d-md-none"> · {{ i.detalle }}</span></div></td>
+                    <td class="d-none d-md-table-cell text-muted">{{ i.detalle }}</td>
+                    <td class="text-end">{{ i.unidades }}</td>
+                    <td class="text-end d-none d-sm-table-cell">{{ i.costo | cop }}</td>
+                    <td class="text-end fw-semibold">{{ i.unidades * i.costo | cop }}</td>
+                  </tr>
+                } @empty {
+                  <tr><td colspan="5" class="text-center text-muted py-5"><i class="bi bi-box fs-3 d-block mb-1"></i>No hay inventario inicial registrado.</td></tr>
+                }
+              }
+            </tbody>
+            @if (inicial().length) {
+              <tfoot class="table-light fw-semibold">
+                <tr><td>Total</td><td class="d-none d-md-table-cell"></td><td class="text-end">{{ totInicial().unidades }}</td>
+                  <td class="d-none d-sm-table-cell"></td><td class="text-end">{{ totInicial().costo | cop }}</td></tr>
+              </tfoot>
+            }
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-xl-4">
+      <div class="card">
+        <div class="card-body">
+          <div class="small text-muted text-uppercase">Balance acumulado · todo incluido</div>
+          <h5 class="mb-3">Desde que arrancó el negocio</h5>
+          <div class="sf-er">
+            <div class="f"><span>Ventas netas</span><span>{{ acumulado().ventas | cop }}</span></div>
+            <div class="f text-danger"><span>(−) Inventario inicial</span><span>{{ totInicial().costo | cop }}</span></div>
+            <div class="f text-danger"><span>(−) Compras de inventario</span><span>{{ acumulado().compras | cop }}</span></div>
+            <div class="f text-danger"><span>(−) Gastos del negocio</span><span>{{ acumulado().gastos | cop }}</span></div>
+            <div class="f total final" [class.neg]="balanceAcumulado() < 0"><span>BALANCE ACUMULADO</span><span>{{ balanceAcumulado() | cop }}</span></div>
+          </div>
+          <div class="d-flex justify-content-between small mt-3 p-2 rounded" style="background: #faf6ea">
+            <span>Mercancía que tienes hoy (al costo)</span><b>{{ acumulado().inventarioHoy | cop }}</b>
+          </div>
+          <div class="small text-muted mt-3">
+            <i class="bi bi-info-circle me-1"></i>Cuenta la mercancía con la que empezaste como dinero que salió. Mientras sea negativo,
+            todavía no has recuperado toda la inversión; la mercancía que te queda es la parte que aún puedes vender.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ======================= RANKINGS ======================= -->
+@if (pestana() === 'productos' || pestana() === 'clientes' || pestana() === 'proveedores') {
+  <div class="card mb-3">
+    <div class="card-body">
+      <div class="row g-2 align-items-center">
+        <div class="col-6 col-md-3">
+          <select class="form-select" [ngModel]="periodo" (ngModelChange)="aplicarPeriodo($event)">
+            @for (p of periodos; track p.id) { <option [value]="p.id">{{ p.nombre }}</option> }
+          </select>
+        </div>
+        @if (periodo === 'personalizado') {
+          <div class="col-6 col-md-4 d-flex gap-1">
+            <input class="form-control" type="date" [(ngModel)]="desde" (change)="cargarRanking()" />
+            <input class="form-control" type="date" [(ngModel)]="hasta" (change)="cargarRanking()" />
+          </div>
+        } @else {
+          <div class="col-6 col-md-4 small text-muted">{{ textoPeriodo }}</div>
+        }
+        @if (pestana() === 'productos') {
+          <div class="col-md-5 text-md-end">
+            <div class="btn-group">
+              <button class="btn btn-sm" [class.btn-dark]="agruparPor === 'producto'" [class.btn-outline-dark]="agruparPor !== 'producto'"
+                      (click)="agruparPor = 'producto'; cargarRanking()">Por producto</button>
+              <button class="btn btn-sm" [class.btn-dark]="agruparPor === 'variante'" [class.btn-outline-dark]="agruparPor !== 'variante'"
+                      (click)="agruparPor = 'variante'; cargarRanking()">Por talla y color</button>
+            </div>
+          </div>
+        }
+      </div>
+    </div>
+  </div>
+
+  @if (pestana() === 'productos') {
+    <div class="row g-3 mb-3">
+      <div class="col-6 col-lg-3"><div class="sf-kpi"><div class="lbl">Unidades vendidas</div><div class="val">{{ totalRanking().unidades | number }}</div></div></div>
+      <div class="col-6 col-lg-3"><div class="sf-kpi"><div class="lbl">Ingresos</div><div class="val">{{ totalRanking().ingresos | cop }}</div></div></div>
+      <div class="col-6 col-lg-3"><div class="sf-kpi"><div class="lbl">Costo</div><div class="val">{{ totalRanking().costo | cop }}</div></div></div>
+      <div class="col-6 col-lg-3"><div class="sf-kpi sf-kpi-destacado"><div class="lbl">Ganancia bruta</div><div class="val">{{ totalRanking().ingresos - totalRanking().costo | cop }}</div></div></div>
+    </div>
+  }
+
+  <div class="card">
+    <div class="table-responsive">
+      <table class="table align-middle mb-0">
+        <thead class="table-light small">
+          @if (pestana() === 'productos') {
+            <tr><th style="width: 40px">#</th><th>Producto</th><th style="width: 30%" class="d-none d-md-table-cell"></th>
+              <th class="text-end">Unid.</th><th class="text-end">Ingresos</th><th class="text-end d-none d-sm-table-cell">Ganancia</th><th class="text-end d-none d-lg-table-cell">Margen</th></tr>
+          } @else {
+            <tr><th style="width: 40px">#</th><th>{{ pestana() === 'clientes' ? 'Cliente' : 'Proveedor' }}</th><th style="width: 30%" class="d-none d-md-table-cell"></th>
+              <th class="text-end">Facturas</th><th class="text-end">Total</th><th class="text-end d-none d-sm-table-cell">Saldo pendiente</th></tr>
+          }
+        </thead>
+        <tbody>
+          @if (cargando()) {
+            <tr><td colspan="7" class="text-center py-5"><span class="spinner-border spinner-border-sm text-secondary"></span></td></tr>
+          } @else {
+            @for (r of ranking(); track r.clave; let i = $index) {
+              <tr>
+                <td><span class="sf-pos" [class.top]="i < 3">{{ i + 1 }}</span></td>
+                <td><div class="fw-semibold">{{ r.nombre }}</div><div class="small text-muted">{{ r.detalle }}</div></td>
+                <td class="d-none d-md-table-cell">
+                  <div class="progress" style="height: 8px">
+                    <div class="progress-bar" style="background: var(--sf-gold)"
+                         [style.width.%]="((pestana() === 'productos' ? r.unidades : r.ingresos) / maxRanking()) * 100"></div>
+                  </div>
+                </td>
+                @if (pestana() === 'productos') {
+                  <td class="text-end fw-semibold">{{ r.unidades }}</td>
+                  <td class="text-end">{{ r.ingresos | cop }}</td>
+                  <td class="text-end d-none d-sm-table-cell text-success">{{ r.ingresos - r.costo | cop }}</td>
+                  <td class="text-end d-none d-lg-table-cell">{{ margen(r.ingresos - r.costo, r.ingresos) | number: '1.0-0' }}%</td>
+                } @else {
+                  <td class="text-end">{{ r.facturas }}</td>
+                  <td class="text-end fw-semibold">{{ r.ingresos | cop }}</td>
+                  <td class="text-end d-none d-sm-table-cell" [class.text-danger]="r.costo > 0">{{ r.costo | cop }}</td>
+                }
+              </tr>
+            } @empty {
+              <tr><td colspan="7" class="text-center text-muted py-5"><i class="bi bi-bar-chart fs-3 d-block mb-1"></i>Sin movimientos en este periodo.</td></tr>
+            }
+          }
+        </tbody>
+      </table>
+    </div>
+  </div>
+}

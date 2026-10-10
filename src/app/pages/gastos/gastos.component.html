@@ -1,0 +1,174 @@
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+  <h2 class="mb-0 me-auto">Gastos del negocio</h2>
+  <app-btn-pdf (generar)="exportarPdf()" [disabled]="!filtrados().length" />
+  <button class="btn btn-primary" (click)="nuevo()"><i class="bi bi-plus-lg me-1"></i>Nuevo gasto</button>
+</div>
+
+<!-- Filtros -->
+<div class="card mb-3">
+  <div class="card-body">
+    <div class="row g-2 align-items-center">
+      <div class="col-md-4">
+        <div class="input-group">
+          <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
+          <input class="form-control" placeholder="Descripción, proveedor o soporte…" [value]="busqueda()" (input)="busqueda.set($any($event.target).value)" />
+        </div>
+      </div>
+      <div class="col-md-3">
+        <ng-select [items]="categorias()" bindLabel="nombre" bindValue="id" placeholder="Todas las categorías"
+                   [ngModel]="categoriaId()" (ngModelChange)="categoriaId.set($event)" notFoundText="Sin resultados" />
+      </div>
+      <div class="col-6 col-md-2">
+        <select class="form-select" [ngModel]="periodo" (ngModelChange)="aplicarPeriodo($event)">
+          @for (p of periodos; track p.id) { <option [value]="p.id">{{ p.nombre }}</option> }
+        </select>
+      </div>
+      @if (periodo === 'personalizado') {
+        <div class="col-6 col-md-3 d-flex gap-1">
+          <input class="form-control" type="date" [(ngModel)]="desde" (change)="cargar()" title="Desde" />
+          <input class="form-control" type="date" [(ngModel)]="hasta" (change)="cargar()" title="Hasta" />
+        </div>
+      } @else {
+        <div class="col-6 col-md-3 small text-muted">{{ textoPeriodo }}</div>
+      }
+    </div>
+  </div>
+</div>
+
+<div class="row g-3">
+  <!-- Resumen por categoría -->
+  <div class="col-lg-4 order-lg-2">
+    <div class="card">
+      <div class="card-body">
+        <div class="sf-kpi border-0 p-0 mb-3">
+          <div class="lbl"><i class="bi bi-credit-card-2-front me-1"></i>Total gastos</div>
+          <div class="val fs-3">{{ total() | cop }}</div>
+          <div class="small text-muted">{{ filtrados().length }} registros · {{ textoPeriodo }}</div>
+        </div>
+        @for (c of porCategoria(); track c.nombre) {
+          <div class="mb-2" role="button" title="Filtrar por esta categoría" (click)="categoriaId.set(categoriaId() === c.id ? null : c.id)">
+            <div class="d-flex justify-content-between small">
+              <span class="fw-semibold">{{ c.nombre }}</span>
+              <span>{{ c.valor | cop }} <span class="text-muted">· {{ c.pct | number: '1.0-0' }}%</span></span>
+            </div>
+            <div class="progress" style="height: 6px">
+              <div class="progress-bar" style="background: var(--sf-gold)" [style.width.%]="c.pct"></div>
+            </div>
+          </div>
+        } @empty {
+          <div class="small text-muted">Sin gastos en este periodo.</div>
+        }
+      </div>
+    </div>
+  </div>
+
+  <!-- Detalle -->
+  <div class="col-lg-8 order-lg-1">
+    <div class="card">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>Fecha</th>
+              <th>Descripción</th>
+              <th class="d-none d-md-table-cell">Categoría</th>
+              <th class="text-end">Valor</th>
+              <th class="text-end" style="width: 120px"></th>
+            </tr>
+          </thead>
+          <tbody>
+            @if (cargando()) {
+              <tr><td colspan="5" class="text-center py-5"><span class="spinner-border spinner-border-sm text-secondary"></span></td></tr>
+            } @else {
+              @for (g of filtrados(); track g.id) {
+                <tr>
+                  <td class="text-nowrap small">{{ fechaCorta(g.fecha) }}</td>
+                  <td>
+                    <div class="fw-semibold">{{ g.descripcion }}</div>
+                    <div class="small text-muted">
+                      <span class="d-md-none">{{ g.categoria?.nombre }} · </span>
+                      {{ nombreMetodo(g.metodo_pago) }}
+                      @if (g.proveedor) { · {{ g.proveedor.nombre }} }
+                      @if (g.numero_soporte) { · Sop. {{ g.numero_soporte }} }
+                    </div>
+                  </td>
+                  <td class="d-none d-md-table-cell"><span class="sf-chip">{{ g.categoria?.nombre }}</span></td>
+                  <td class="text-end fw-semibold text-nowrap">{{ g.valor | cop }}</td>
+                  <td class="text-end text-nowrap">
+                    <button class="btn btn-sm btn-light" title="Editar" (click)="editar(g)"><i class="bi bi-pencil"></i></button>
+                    <button class="btn btn-sm btn-light" title="Duplicar con fecha de hoy" (click)="duplicar(g)"><i class="bi bi-copy"></i></button>
+                    <button class="btn btn-sm btn-light text-danger" title="Eliminar" (click)="eliminar(g)"><i class="bi bi-trash"></i></button>
+                  </td>
+                </tr>
+              } @empty {
+                <tr><td colspan="5" class="text-center text-muted py-5">
+                  <i class="bi bi-wallet2 fs-3 d-block mb-1"></i>No hay gastos en este periodo.
+                </td></tr>
+              }
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal gasto -->
+@if (modal()) {
+  <div class="modal d-block" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-fullscreen-sm-down">
+      <form class="modal-content" (ngSubmit)="guardar()">
+        <div class="modal-header">
+          <h5 class="modal-title">{{ form.id ? 'Editar gasto' : 'Nuevo gasto' }}</h5>
+          <button type="button" class="btn-close" (click)="modal.set(false)"></button>
+        </div>
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">Categoría * <span class="small text-muted">(escribe para buscar o crear)</span></label>
+              <ng-select name="categoria" [items]="categorias()" bindLabel="nombre" bindValue="id" [(ngModel)]="form.categoria_id"
+                         [addTag]="crearCategoria" addTagText="Crear categoría" placeholder="Publicidad, empaque…"
+                         notFoundText="Sin resultados" appendTo="body" />
+            </div>
+            <div class="col-6 col-md-3">
+              <label class="form-label">Fecha *</label>
+              <input class="form-control" type="date" name="fecha" [(ngModel)]="form.fecha" />
+            </div>
+            <div class="col-6 col-md-3">
+              <label class="form-label">Valor *</label>
+              <div class="input-group"><span class="input-group-text">$</span>
+                <input class="form-control" appNumero name="valor" [(ngModel)]="form.valor" /></div>
+            </div>
+            <div class="col-12">
+              <label class="form-label">Descripción *</label>
+              <input class="form-control" name="descripcion" [(ngModel)]="form.descripcion" placeholder="Ej: Pauta Instagram octubre, 200 bolsas kraft…" />
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Proveedor <span class="small text-muted">(opcional)</span></label>
+              <ng-select name="proveedor" [items]="proveedores()" bindLabel="nombre" bindValue="id" [(ngModel)]="form.proveedor_id"
+                         [addTag]="crearProveedor" addTagText="Crear proveedor" placeholder="Buscar…"
+                         notFoundText="Sin resultados" appendTo="body" />
+            </div>
+            <div class="col-6 col-md-3">
+              <label class="form-label">Método de pago</label>
+              <select class="form-select" name="metodo" [(ngModel)]="form.metodo_pago">
+                @for (m of metodos; track m.id) { <option [value]="m.id">{{ m.nombre }}</option> }
+              </select>
+            </div>
+            <div class="col-6 col-md-3">
+              <label class="form-label">No. soporte</label>
+              <input class="form-control" name="soporte" [(ngModel)]="form.numero_soporte" placeholder="Factura / recibo" />
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-light" (click)="modal.set(false)">Cancelar</button>
+          <button type="submit" class="btn btn-primary" [disabled]="guardando()">
+            @if (guardando()) { <span class="spinner-border spinner-border-sm me-1"></span> }Guardar
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+  <div class="modal-backdrop show"></div>
+}

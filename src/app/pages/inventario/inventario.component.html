@@ -1,0 +1,397 @@
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+  <h2 class="mb-0 me-auto">Inventario</h2>
+  <app-btn-pdf (generar)="exportarPdf()" [disabled]="!filtradas().length" />
+  <button class="btn btn-primary" (click)="nuevoProducto()"><i class="bi bi-plus-lg me-1"></i>Nuevo producto</button>
+</div>
+
+<!-- Indicadores -->
+<div class="row g-3 mb-3">
+  <div class="col-6 col-lg"><div class="sf-kpi"><div class="lbl"><i class="bi bi-tags me-1"></i>Referencias</div><div class="val">{{ kpis().referencias | number }}</div></div></div>
+  <div class="col-6 col-lg"><div class="sf-kpi"><div class="lbl"><i class="bi bi-box-seam me-1"></i>Unidades</div><div class="val">{{ kpis().unidades | number }}</div></div></div>
+  <div class="col-6 col-lg"><div class="sf-kpi"><div class="lbl"><i class="bi bi-cash-stack me-1"></i>Valor al costo</div><div class="val">{{ kpis().valorCosto | cop }}</div></div></div>
+  <div class="col-6 col-lg"><div class="sf-kpi"><div class="lbl"><i class="bi bi-shop me-1"></i>Valor a precio venta</div><div class="val">{{ kpis().valorVenta | cop }}</div></div></div>
+  <div class="col-12 col-lg">
+    <div class="sf-kpi" role="button" (click)="vista.set('bajo')">
+      <div class="lbl"><i class="bi bi-exclamation-triangle me-1"></i>Bajo stock</div>
+      <div class="val" [class.text-danger]="kpis().bajos > 0">{{ kpis().bajos }}</div>
+    </div>
+  </div>
+</div>
+
+<div class="card mb-3">
+  <div class="card-body">
+    <div class="row g-2">
+      <div class="col-md-5">
+        <div class="input-group">
+          <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
+          <input class="form-control" placeholder="Buscar producto, código, talla, color…" [value]="busqueda()" (input)="busqueda.set($any($event.target).value)" />
+        </div>
+      </div>
+      <div class="col-sm-6 col-md-4">
+        <ng-select [items]="categorias()" bindLabel="nombre" bindValue="id" placeholder="Todas las categorías"
+                   [ngModel]="categoriaId()" (ngModelChange)="categoriaId.set($event)" notFoundText="Sin resultados" />
+      </div>
+      <div class="col-8 col-md-2">
+        <select class="form-select" [value]="vista()" (change)="vista.set($any($event.target).value)">
+          <option value="todos">Activos</option>
+          <option value="bajo">Bajo stock</option>
+          <option value="agotado">Agotados</option>
+          <option value="inactivos">Inactivos</option>
+        </select>
+      </div>
+      <div class="col-4 col-md-1 d-flex">
+        <div class="btn-group w-100">
+          <button class="btn" title="Ver en cuadros" [class.btn-dark]="modo() === 'cuadros'" [class.btn-outline-dark]="modo() !== 'cuadros'" (click)="cambiarModo('cuadros')"><i class="bi bi-grid-3x3-gap"></i></button>
+          <button class="btn" title="Ver en lista" [class.btn-dark]="modo() === 'lista'" [class.btn-outline-dark]="modo() !== 'lista'" (click)="cambiarModo('lista')"><i class="bi bi-list-ul"></i></button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= Vista en cuadros ================= -->
+@if (modo() === 'cuadros') {
+  @if (cargando()) {
+    <div class="text-center py-5"><span class="spinner-border spinner-border-sm text-secondary"></span></div>
+  } @else {
+    <div class="sf-grid">
+      @for (g of grupos(); track g.producto.id) {
+        <div class="card sf-prod">
+          <div class="card-body p-3">
+            <div class="d-flex justify-content-between align-items-start gap-2">
+              <div class="min-w-0">
+                <div class="sf-cat">{{ g.producto.categoria?.nombre ?? 'Sin categoría' }}</div>
+                <div class="fw-semibold text-truncate lh-sm" [title]="g.producto.nombre">{{ g.producto.nombre }}</div>
+              </div>
+              <span class="badge rounded-pill text-nowrap" [class.text-bg-danger]="g.stock === 0" [class.text-bg-dark]="g.stock > 0">{{ g.stock }} und.</span>
+            </div>
+            <div class="small mt-1">
+              <b>{{ rango(g.precioMin, g.precioMax) }}</b>
+              <span class="text-muted"> · costo {{ rango(g.costoMin, g.costoMax) }}</span>
+            </div>
+
+            <div class="mt-2 d-flex flex-column gap-1">
+              @for (c of g.colores; track c.color) {
+                <div class="d-flex align-items-start gap-2">
+                  <div class="sf-color-lbl" [title]="c.color">
+                    <span class="sf-dot" [style.background]="colorCss(c.color)"></span>
+                    <span class="text-truncate">{{ c.color || '—' }}</span>
+                  </div>
+                  <div class="d-flex flex-wrap gap-1">
+                    @for (v of c.variantes; track v.id) {
+                      <button type="button" class="sf-talla" [class.bajo]="v.stock > 0 && esBajo(v)" [class.agotado]="v.stock === 0"
+                              [title]="v.sku + ' · ' + (v.precio | cop) + ' · clic para ver kardex y ajustar'" (click)="abrirKardex(v)">
+                        <span class="t">{{ v.talla || 'Única' }}</span><span class="n">{{ v.stock }}</span>
+                      </button>
+                    }
+                  </div>
+                </div>
+              }
+            </div>
+
+            <div class="d-flex justify-content-between align-items-center mt-2 pt-2 border-top small">
+              <span class="text-muted">Valor {{ g.valorCosto | cop }}</span>
+              <button class="btn btn-sm btn-link text-dark p-0 text-decoration-none" (click)="editarProducto(g.variantes[0])">
+                <i class="bi bi-pencil me-1"></i>Editar
+              </button>
+            </div>
+          </div>
+        </div>
+      } @empty {
+        <div class="text-center text-muted py-5" style="grid-column: 1 / -1"><i class="bi bi-box fs-3 d-block mb-1"></i>No hay productos que coincidan.</div>
+      }
+    </div>
+    @if (grupos().length) {
+      <div class="small text-muted mt-3"><span class="sf-talla-ley bajo"></span> Bajo stock &nbsp; <span class="sf-talla-ley agotado"></span> Agotado &nbsp;·&nbsp; Toca una talla para ver su kardex o ajustar unidades.</div>
+    }
+  }
+} @else {
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>Producto</th>
+          <th class="d-none d-md-table-cell">Código</th>
+          <th>Talla / Color</th>
+          <th class="text-end d-none d-lg-table-cell">Costo</th>
+          <th class="text-end">Precio</th>
+          <th class="text-end d-none d-xl-table-cell">Margen</th>
+          <th class="text-center">Stock</th>
+          <th class="text-end" style="width: 170px">Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        @if (cargando()) {
+          <tr><td colspan="8" class="text-center py-5"><span class="spinner-border spinner-border-sm text-secondary"></span></td></tr>
+        } @else {
+          @for (f of filtradas(); track f.id) {
+            <tr>
+              <td>
+                <div class="fw-semibold">{{ f.producto.nombre }}</div>
+                <div class="small text-muted">{{ f.producto.categoria?.nombre ?? 'Sin categoría' }}<span class="d-md-none"> · {{ f.sku }}</span></div>
+              </td>
+              <td class="d-none d-md-table-cell"><code class="text-dark">{{ f.sku }}</code></td>
+              <td>
+                @if (f.talla) { <span class="sf-chip me-1">{{ f.talla }}</span> }
+                @if (f.color) { <span class="sf-chip">{{ f.color }}</span> }
+              </td>
+              <td class="text-end d-none d-lg-table-cell">{{ f.costo | cop }}</td>
+              <td class="text-end">{{ f.precio | cop }}</td>
+              <td class="text-end d-none d-xl-table-cell" [class.text-danger]="margen(f) < 0">{{ margen(f) | number: '1.0-0' }}%</td>
+              <td class="text-center">
+                <span class="badge rounded-pill fs-6 fw-semibold"
+                      [class.text-bg-danger]="f.stock === 0"
+                      [class.text-bg-warning]="f.stock > 0 && esBajo(f)"
+                      [class.text-bg-light]="!esBajo(f)">{{ f.stock }}</span>
+              </td>
+              <td class="text-end text-nowrap">
+                <button class="btn btn-sm btn-light" title="Editar producto" (click)="editarProducto(f)"><i class="bi bi-pencil"></i></button>
+                <button class="btn btn-sm btn-light" title="Ajustar inventario" (click)="abrirAjuste(f)"><i class="bi bi-plus-slash-minus"></i></button>
+                <button class="btn btn-sm btn-light" title="Kardex" (click)="abrirKardex(f)"><i class="bi bi-clock-history"></i></button>
+              </td>
+            </tr>
+          } @empty {
+            <tr><td colspan="8" class="text-center text-muted py-5">
+              <i class="bi bi-box fs-3 d-block mb-1"></i>No hay productos que coincidan.
+            </td></tr>
+          }
+        }
+      </tbody>
+      @if (!cargando() && filtradas().length) {
+        <tfoot class="table-light">
+          <tr>
+            <td class="small text-muted">{{ filtradas().length }} referencias</td>
+            <td class="d-none d-md-table-cell"></td><td></td><td class="d-none d-lg-table-cell"></td><td></td><td class="d-none d-xl-table-cell"></td>
+            <td class="text-center fw-semibold">{{ totalesFiltro().unidades | number }}</td>
+            <td class="text-end small text-muted">{{ totalesFiltro().valorCosto | cop }}</td>
+          </tr>
+        </tfoot>
+      }
+    </table>
+  </div>
+</div>
+}
+
+<!-- ================= Modal producto ================= -->
+@if (modalProducto()) {
+  <div class="modal d-block" tabindex="-1">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable modal-fullscreen-lg-down">
+      <form class="modal-content" (ngSubmit)="guardarProducto()">
+        <div class="modal-header">
+          <h5 class="modal-title">{{ prod.id ? 'Editar producto' : 'Nuevo producto' }}</h5>
+          <button type="button" class="btn-close" (click)="modalProducto.set(false)"></button>
+        </div>
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">Nombre del producto *</label>
+              <input class="form-control" name="nombre" [(ngModel)]="prod.nombre" placeholder="Ej: Legging tiro alto" required />
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Categoría <span class="text-muted small">(escribe para buscar o crear)</span></label>
+              <ng-select name="categoria" [items]="categorias()" bindLabel="nombre" bindValue="id" [(ngModel)]="prod.categoria_id"
+                         [addTag]="crearCategoria" addTagText="Crear categoría" placeholder="Seleccionar…" notFoundText="Sin resultados"
+                         appendTo="body" />
+            </div>
+            <div class="col-md-9">
+              <label class="form-label">Descripción</label>
+              <input class="form-control" name="descripcion" [(ngModel)]="prod.descripcion" placeholder="Material, tipo de tela, características…" />
+            </div>
+            <div class="col-md-3 d-flex align-items-end">
+              <div class="form-check form-switch mb-2">
+                <input class="form-check-input" type="checkbox" id="pactivo" name="pactivo" [(ngModel)]="prod.activo" />
+                <label class="form-check-label" for="pactivo">Producto activo</label>
+              </div>
+            </div>
+          </div>
+
+          <hr class="my-4" />
+
+          <div class="p-3 rounded-3 mb-3" style="background: #faf6ea">
+            <div class="fw-semibold mb-2"><i class="bi bi-magic text-gold me-1"></i>Generar variantes automáticamente</div>
+            <div class="row g-2 align-items-end">
+              <div class="col-md-5">
+                <label class="form-label small mb-1">Tallas (separadas por coma)</label>
+                <input class="form-control" name="tallasTxt" [(ngModel)]="tallasTxt" placeholder="XS, S, M, L, XL" />
+              </div>
+              <div class="col-md-5">
+                <label class="form-label small mb-1">Colores (separados por coma)</label>
+                <input class="form-control" name="coloresTxt" [(ngModel)]="coloresTxt" placeholder="Negro, Rosa, Azul" />
+              </div>
+              <div class="col-md-2 d-grid">
+                <button type="button" class="btn btn-gold" (click)="generarCombinaciones()">Generar</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="table-responsive">
+            <table class="table table-sm align-middle">
+              <thead class="table-light small">
+                <tr>
+                  <th style="min-width: 80px">Talla</th>
+                  <th style="min-width: 110px">Color</th>
+                  <th style="min-width: 150px">Código <span class="fw-normal text-muted">(automático)</span></th>
+                  <th style="min-width: 120px" class="text-end">Costo</th>
+                  <th style="min-width: 120px" class="text-end">Precio venta *</th>
+                  <th style="min-width: 90px" class="text-end">{{ prod.id ? 'Stock' : 'Stock inicial' }}</th>
+                  <th style="min-width: 110px" class="text-end" title="Te avisa en amarillo cuando queden estas unidades o menos">Avisar cuando queden</th>
+                  <th class="text-center">Activa</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (v of variantes; track $index; let i = $index) {
+                  <tr>
+                    <td><input class="form-control form-control-sm" [name]="'t' + i" [(ngModel)]="v.talla" /></td>
+                    <td><input class="form-control form-control-sm" [name]="'c' + i" [(ngModel)]="v.color" /></td>
+                    <td><input class="form-control form-control-sm text-uppercase" [name]="'s' + i" [(ngModel)]="v.sku" placeholder="Auto" /></td>
+                    <td><input class="form-control form-control-sm" appNumero [name]="'co' + i" [(ngModel)]="v.costo" /></td>
+                    <td><input class="form-control form-control-sm" appNumero [name]="'p' + i" [(ngModel)]="v.precio" /></td>
+                    <td>
+                      @if (v.id) {
+                        <div class="text-end pe-2 fw-semibold">{{ v.stock }}</div>
+                      } @else {
+                        <input class="form-control form-control-sm" appNumero [name]="'si' + i" [(ngModel)]="v.stock_inicial" />
+                      }
+                    </td>
+                    <td><input class="form-control form-control-sm" appNumero [name]="'m' + i" [(ngModel)]="v.stock_minimo" /></td>
+                    <td class="text-center"><input class="form-check-input" type="checkbox" [name]="'a' + i" [(ngModel)]="v.activo" /></td>
+                    <td class="text-end">
+                      @if (!v.id) {
+                        <button type="button" class="btn btn-sm btn-link text-danger" (click)="quitarVariante(i)"><i class="bi bi-x-lg"></i></button>
+                      }
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+          <button type="button" class="btn btn-sm btn-outline-secondary" (click)="agregarVariante()"><i class="bi bi-plus"></i> Agregar variante</button>
+          @if (variantes.length > 1) {
+            <button type="button" class="btn btn-sm btn-outline-secondary ms-2" (click)="igualarPrecios()">
+              <i class="bi bi-arrow-down-square"></i> Copiar costo y precio de la 1ª fila a todas
+            </button>
+          }
+          <p class="small text-muted mt-3 mb-0">
+            <i class="bi bi-info-circle me-1"></i>El <b>costo</b> que escribes aquí es el inicial; luego se recalcula solo con cada factura de compra.
+            El <b>stock inicial</b> son las unidades que tienes hoy. Después, las compras suman y las ventas restan solas;
+            para corregir unidades usa el botón <b>±</b> (Ajustar inventario) de la tabla.
+          </p>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-light" (click)="modalProducto.set(false)">Cancelar</button>
+          <button type="submit" class="btn btn-primary" [disabled]="guardando()">
+            @if (guardando()) { <span class="spinner-border spinner-border-sm me-1"></span> }Guardar producto
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+  <div class="modal-backdrop show"></div>
+}
+
+<!-- ================= Modal ajuste ================= -->
+@if (modalAjuste() && ajuste.fila; as f) {
+  <div class="modal d-block" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-fullscreen-sm-down">
+      <form class="modal-content" (ngSubmit)="guardarAjuste()">
+        <div class="modal-header">
+          <h5 class="modal-title">Ajustar inventario</h5>
+          <button type="button" class="btn-close" (click)="modalAjuste.set(false)"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3 p-2 rounded bg-light">
+            <div class="fw-semibold">{{ f.producto.nombre }}</div>
+            <div class="small text-muted">{{ f.sku }} · {{ f.talla }} {{ f.color }} · Stock actual: <b>{{ f.stock }}</b></div>
+          </div>
+          <div class="btn-group w-100 mb-3" role="group">
+            <input type="radio" class="btn-check" id="aj-in" name="tipo" value="ajuste_entrada" [(ngModel)]="ajuste.tipo" />
+            <label class="btn btn-outline-success" for="aj-in"><i class="bi bi-plus-circle me-1"></i>Entrada</label>
+            <input type="radio" class="btn-check" id="aj-out" name="tipo" value="ajuste_salida" [(ngModel)]="ajuste.tipo" />
+            <label class="btn btn-outline-danger" for="aj-out"><i class="bi bi-dash-circle me-1"></i>Salida</label>
+          </div>
+          <div class="row g-3">
+            <div class="col-6">
+              <label class="form-label">Cantidad *</label>
+              <input class="form-control" appNumero name="cantidad" [(ngModel)]="ajuste.cantidad" />
+            </div>
+            <div class="col-6">
+              <label class="form-label">Quedará en</label>
+              <div class="form-control bg-light text-end fw-semibold" [class.text-danger]="stockResultante < 0">{{ stockResultante }}</div>
+            </div>
+            <div class="col-12">
+              <label class="form-label">Motivo</label>
+              <select class="form-select" name="motivo" [(ngModel)]="ajuste.motivo">
+                @for (m of motivos; track m) { <option [value]="m">{{ m }}</option> }
+              </select>
+            </div>
+            <div class="col-12">
+              <label class="form-label">Observación</label>
+              <input class="form-control" name="notas" [(ngModel)]="ajuste.notas" />
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-light" (click)="modalAjuste.set(false)">Cancelar</button>
+          <button type="submit" class="btn btn-primary" [disabled]="guardando()">Registrar ajuste</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  <div class="modal-backdrop show"></div>
+}
+
+<!-- ================= Modal kardex ================= -->
+@if (modalKardex() && kardexFila(); as f) {
+  <div class="modal d-block" tabindex="-1">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable modal-fullscreen-lg-down">
+      <div class="modal-content">
+        <div class="modal-header">
+          <div>
+            <h5 class="modal-title mb-0">Kardex · {{ f.producto.nombre }}</h5>
+            <div class="small text-muted">{{ f.sku }} · {{ f.talla }} {{ f.color }} · Stock actual {{ f.stock }} · Costo promedio {{ f.costo | cop }}</div>
+          </div>
+          <button type="button" class="btn-close" (click)="modalKardex.set(false)"></button>
+        </div>
+        <div class="modal-body p-0">
+          <div class="table-responsive">
+            <table class="table table-sm table-striped align-middle mb-0">
+              <thead class="table-light small">
+                <tr>
+                  <th>Fecha</th><th>Tipo</th><th>Documento</th><th class="d-none d-md-table-cell">Detalle</th>
+                  <th class="text-end">Entra</th><th class="text-end">Sale</th><th class="text-end d-none d-sm-table-cell">Costo u.</th><th class="text-end">Saldo</th>
+                </tr>
+              </thead>
+              <tbody>
+                @if (cargandoKardex()) {
+                  <tr><td colspan="8" class="text-center py-4"><span class="spinner-border spinner-border-sm"></span></td></tr>
+                }
+                @for (m of movimientos(); track m.id) {
+                  <tr>
+                    <td class="small text-nowrap">{{ m.fecha | date: 'dd/MM/yy HH:mm' }}</td>
+                    <td>{{ nombreTipo(m.tipo) }}</td>
+                    <td class="small">{{ m.referencia }}</td>
+                    <td class="small text-muted d-none d-md-table-cell">{{ m.notas }}</td>
+                    <td class="text-end text-success">{{ m.cantidad > 0 ? m.cantidad : '' }}</td>
+                    <td class="text-end text-danger">{{ m.cantidad < 0 ? -m.cantidad : '' }}</td>
+                    <td class="text-end d-none d-sm-table-cell">{{ m.costo_unitario | cop }}</td>
+                    <td class="text-end fw-semibold">{{ m.saldo }}</td>
+                  </tr>
+                } @empty {
+                  @if (!cargandoKardex()) { <tr><td colspan="8" class="text-center text-muted py-4">Sin movimientos todavía.</td></tr> }
+                }
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-gold me-auto" (click)="modalKardex.set(false); abrirAjuste(f)"><i class="bi bi-plus-slash-minus me-1"></i>Ajustar inventario</button>
+          <app-btn-pdf [compacto]="true" (generar)="kardexPdf()" [disabled]="!movimientos().length" />
+          <button type="button" class="btn btn-light" (click)="modalKardex.set(false)">Cerrar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="modal-backdrop show"></div>
+}

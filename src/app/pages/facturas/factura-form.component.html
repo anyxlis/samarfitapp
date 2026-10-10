@@ -1,0 +1,171 @@
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+  <a class="btn btn-light" [routerLink]="cfg.ruta" title="Volver"><i class="bi bi-arrow-left"></i></a>
+  <h2 class="mb-0 me-auto">Nueva {{ cfg.titulo.toLowerCase() }}</h2>
+  <div class="text-end">
+    <div class="small text-muted lh-1">Consecutivo</div>
+    <div class="fs-5 fw-semibold text-gold">{{ consecutivo() || cfg.prefijo + '-…' }}</div>
+  </div>
+</div>
+
+<form (ngSubmit)="guardar()">
+  <div class="row g-3">
+    <!-- ===== Columna principal ===== -->
+    <div class="col-xl-8">
+      <div class="card mb-3">
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-md-7">
+              <label class="form-label">{{ cfg.tercero }} * <span class="small text-muted">(escribe para buscar o crear)</span></label>
+              <ng-select name="tercero" [items]="terceros()" bindLabel="nombre" bindValue="id" [(ngModel)]="f.tercero_id"
+                         [searchFn]="buscarTercero" [addTag]="crearTercero" [addTagText]="'Crear ' + cfg.tercero.toLowerCase()"
+                         placeholder="Buscar por nombre, documento o teléfono…" notFoundText="Sin resultados">
+                <ng-template ng-option-tmp let-item="item">
+                  <div>{{ item.nombre }}</div>
+                  @if (item.documento || item.telefono) {
+                    <div class="small text-muted">{{ item.documento }} {{ item.telefono }}</div>
+                  }
+                </ng-template>
+              </ng-select>
+            </div>
+            <div class="col-6 col-md-5">
+              <label class="form-label">Fecha *</label>
+              <input class="form-control" type="date" name="fecha" [(ngModel)]="f.fecha" required />
+            </div>
+            @if (esCompra) {
+              <div class="col-6 col-md-7">
+                <label class="form-label">No. factura del proveedor</label>
+                <input class="form-control" name="numero_proveedor" [(ngModel)]="f.numero_proveedor" placeholder="Opcional" />
+              </div>
+            }
+            <div class="col-md-5" [class.col-12]="!esCompra">
+              <label class="form-label">Forma de pago</label>
+              <div class="btn-group w-100">
+                <input type="radio" class="btn-check" id="fp-contado" name="forma_pago" value="contado" [(ngModel)]="f.forma_pago" />
+                <label class="btn btn-outline-dark" for="fp-contado"><i class="bi bi-cash me-1"></i>Contado</label>
+                <input type="radio" class="btn-check" id="fp-credito" name="forma_pago" value="credito" [(ngModel)]="f.forma_pago" />
+                <label class="btn btn-outline-dark" for="fp-credito"><i class="bi bi-calendar2-week me-1"></i>Crédito</label>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Productos -->
+      <div class="card">
+        <div class="card-body border-bottom">
+          <label class="form-label fw-semibold mb-1"><i class="bi bi-upc-scan me-1 text-gold"></i>Agregar producto</label>
+          <ng-select name="buscador" [items]="variantes()" bindLabel="etiqueta" [(ngModel)]="buscador" (change)="agregar($event)"
+                     [searchFn]="buscarVariante" placeholder="Escribe nombre, talla, color o código…" notFoundText="No se encontró el producto">
+            <ng-template ng-option-tmp let-item="item">
+              <div class="d-flex justify-content-between gap-2">
+                <div>
+                  <div>{{ item.nombre }}</div>
+                  <div class="small text-muted">{{ item.talla }} {{ item.color }} · <code>{{ item.sku }}</code></div>
+                </div>
+                <div class="text-end small">
+                  <div>{{ (esCompra ? item.costo : item.precio) | cop }}</div>
+                  <div [class.text-danger]="item.stock === 0" class="text-muted">Stock {{ item.stock }}</div>
+                </div>
+              </div>
+            </ng-template>
+          </ng-select>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table align-middle mb-0">
+            <thead class="table-light small">
+              <tr>
+                <th>Producto</th>
+                <th style="width: 110px" class="text-center">Cantidad</th>
+                <th style="width: 150px" class="text-end">{{ cfg.precio }}</th>
+                <th style="width: 130px" class="text-end">Subtotal</th>
+                <th style="width: 40px"></th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (i of items; track i.variante_id; let idx = $index) {
+                <tr>
+                  <td>
+                    <div class="fw-semibold">{{ i.nombre }}</div>
+                    <div class="small text-muted">{{ i.detalle }} · <code>{{ i.sku }}</code>
+                      @if (!esCompra) { · <span [class.text-danger]="sinStock(i)">disponibles {{ i.stock }}</span> }
+                    </div>
+                  </td>
+                  <td><input class="form-control form-control-sm" appNumero [name]="'cant' + idx" [(ngModel)]="i.cantidad" [class.is-invalid]="sinStock(i)" /></td>
+                  <td>
+                    <div class="input-group input-group-sm">
+                      <span class="input-group-text">$</span>
+                      <input class="form-control" appNumero [name]="'precio' + idx" [(ngModel)]="i.precio" />
+                    </div>
+                  </td>
+                  <td class="text-end fw-semibold">{{ subtotalItem(i) | cop }}</td>
+                  <td><button type="button" class="btn btn-sm btn-link text-danger" (click)="quitar(idx)"><i class="bi bi-x-lg"></i></button></td>
+                </tr>
+              } @empty {
+                <tr><td colspan="5" class="text-center text-muted py-5">
+                  <i class="bi bi-cart3 fs-3 d-block mb-1"></i>Busca arriba los productos para agregarlos.
+                </td></tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== Resumen ===== -->
+    <div class="col-xl-4">
+      <div class="card position-sticky" style="top: 80px">
+        <div class="card-body">
+          <h5 class="mb-3">Resumen</h5>
+
+          <div class="d-flex justify-content-between mb-2"><span class="text-muted">Productos</span><span>{{ items.length }} ({{ unidades }} und.)</span></div>
+          <div class="d-flex justify-content-between mb-3"><span class="text-muted">Subtotal</span><span>{{ subtotal | cop }}</span></div>
+
+          <label class="form-label small mb-1">Descuento</label>
+          <div class="input-group mb-1">
+            <button type="button" class="btn" [class.btn-dark]="f.descuento_tipo === 'valor'" [class.btn-outline-dark]="f.descuento_tipo !== 'valor'"
+                    (click)="f.descuento_tipo = 'valor'">$</button>
+            <button type="button" class="btn" [class.btn-dark]="f.descuento_tipo === 'porcentaje'" [class.btn-outline-dark]="f.descuento_tipo !== 'porcentaje'"
+                    (click)="f.descuento_tipo = 'porcentaje'">%</button>
+            <input class="form-control" appNumero name="descuento_valor" [(ngModel)]="f.descuento_valor" placeholder="0" />
+          </div>
+          @if (descuento > 0) {
+            <div class="d-flex justify-content-between small text-danger mb-2"><span>Descuento aplicado</span><span>- {{ descuento | cop }}</span></div>
+          }
+
+          <hr />
+          <div class="d-flex justify-content-between align-items-baseline mb-3">
+            <span class="fw-semibold">TOTAL</span><span class="fs-3 fw-semibold">{{ total | cop }}</span>
+          </div>
+
+          @if (f.forma_pago === 'contado') {
+            <label class="form-label small mb-1">Método de pago</label>
+            <select class="form-select mb-3" name="metodo_pago" [(ngModel)]="f.metodo_pago">
+              @for (m of metodos; track m.id) { <option [value]="m.id">{{ m.nombre }}</option> }
+            </select>
+          } @else {
+            <label class="form-label small mb-1">Vence el *</label>
+            <input class="form-control mb-2" type="date" name="fecha_vencimiento" [(ngModel)]="f.fecha_vencimiento" />
+            <div class="d-flex gap-1 mb-3">
+              @for (d of [8, 15, 30, 60]; track d) {
+                <button type="button" class="btn btn-sm btn-outline-secondary flex-fill" (click)="vencerEn(d)">{{ d }} días</button>
+              }
+            </div>
+          }
+
+          <label class="form-label small mb-1">Notas</label>
+          <textarea class="form-control mb-3" rows="2" name="notas" [(ngModel)]="f.notas"></textarea>
+
+          <button type="submit" class="btn btn-primary w-100 py-2" [disabled]="guardando()">
+            @if (guardando()) { <span class="spinner-border spinner-border-sm me-1"></span> }
+            <i class="bi bi-check2-circle me-1"></i>Guardar factura
+          </button>
+          <p class="small text-muted mt-2 mb-0 text-center">
+            @if (esCompra) { Al guardar, las unidades entran al inventario y se actualiza el costo. }
+            @else { Al guardar, las unidades salen del inventario. }
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</form>

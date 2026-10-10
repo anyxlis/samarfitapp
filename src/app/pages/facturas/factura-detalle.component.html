@@ -1,0 +1,157 @@
+@if (cargando() && !f()) {
+  <div class="text-center py-5"><span class="spinner-border text-secondary"></span></div>
+}
+
+@if (f(); as f) {
+  <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+    <a class="btn btn-light" [routerLink]="cfg.ruta" title="Volver"><i class="bi bi-arrow-left"></i></a>
+    <div class="me-auto">
+      <h2 class="mb-0">{{ f.numero }} <span class="badge fs-6 align-middle {{ estados[f.estado].clase }}">{{ estados[f.estado].texto }}</span></h2>
+      <div class="small text-muted">{{ cfg.titulo }} · {{ fechaCorta(f.fecha) }}</div>
+    </div>
+    <app-btn-pdf (generar)="descargarPdf()" />
+    @if (f.estado !== 'anulada') {
+      <button class="btn btn-outline-danger" (click)="anular()" [disabled]="guardando()"><i class="bi bi-x-octagon me-1"></i>Anular</button>
+    }
+    <a class="btn btn-primary" [routerLink]="[cfg.ruta, 'nueva']"><i class="bi bi-plus-lg me-1"></i>Nueva</a>
+  </div>
+
+  @if (f.estado === 'anulada') {
+    <div class="alert alert-secondary"><i class="bi bi-info-circle me-1"></i>Esta factura está anulada: no afecta el inventario, la cartera ni los informes.</div>
+  } @else if (vencida) {
+    <div class="alert alert-danger"><i class="bi bi-exclamation-triangle me-1"></i>Vencida desde el {{ fechaCorta(f.fecha_vencimiento) }}.</div>
+  }
+
+  <div class="row g-3">
+    <div class="col-xl-8">
+      <div class="card mb-3">
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <div class="small text-muted text-uppercase">{{ cfg.tercero }}</div>
+              <div class="fw-semibold fs-5">{{ f.tercero.nombre }}</div>
+              <div class="small text-muted">
+                @if (f.tercero.documento) { {{ f.tercero.tipo_documento }} {{ f.tercero.documento }}<br /> }
+                @if (f.tercero.telefono) { {{ f.tercero.telefono }}<br /> }
+                {{ f.tercero.correo }}
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="row small g-1">
+                <div class="col-6 text-muted">Forma de pago</div><div class="col-6 text-end">{{ f.forma_pago === 'credito' ? 'Crédito' : 'Contado' }}</div>
+                @if (f.fecha_vencimiento) { <div class="col-6 text-muted">Vence</div><div class="col-6 text-end" [class.text-danger]="vencida">{{ fechaCorta(f.fecha_vencimiento) }}</div> }
+                @if (f.numero_proveedor) { <div class="col-6 text-muted">Factura proveedor</div><div class="col-6 text-end">{{ f.numero_proveedor }}</div> }
+                @if (f.notas) { <div class="col-12 text-muted mt-2"><i class="bi bi-chat-left-text me-1"></i>{{ f.notas }}</div> }
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="table-responsive">
+          <table class="table align-middle mb-0">
+            <thead class="table-light small">
+              <tr><th>Producto</th><th class="text-center">Cant.</th><th class="text-end">{{ cfg.precio }}</th><th class="text-end">Subtotal</th></tr>
+            </thead>
+            <tbody>
+              @for (i of f.items; track i.id) {
+                <tr>
+                  <td>{{ descripcion(i.variante) }}<div class="small text-muted"><code>{{ i.variante.sku }}</code></div></td>
+                  <td class="text-center">{{ i.cantidad }}</td>
+                  <td class="text-end">{{ precio(i) | cop }}</td>
+                  <td class="text-end fw-semibold">{{ i.subtotal | cop }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-xl-4">
+      <div class="card mb-3">
+        <div class="card-body">
+          <div class="d-flex justify-content-between mb-1"><span class="text-muted">Subtotal</span><span>{{ f.subtotal | cop }}</span></div>
+          @if (f.descuento > 0) {
+            <div class="d-flex justify-content-between mb-1 text-danger">
+              <span>Descuento @if (f.descuento_tipo === 'porcentaje') { ({{ f.descuento_valor }}%) }</span><span>- {{ f.descuento | cop }}</span>
+            </div>
+          }
+          <hr class="my-2" />
+          <div class="d-flex justify-content-between align-items-baseline"><span class="fw-semibold">TOTAL</span><span class="fs-4 fw-semibold">{{ f.total | cop }}</span></div>
+          @if (f.estado !== 'anulada') {
+            <div class="d-flex justify-content-between mt-2"><span class="text-muted">{{ cfg.tipo === 'compra' ? 'Pagado' : 'Abonado' }}</span><span class="text-success">{{ f.pagado | cop }}</span></div>
+            <div class="d-flex justify-content-between"><span class="fw-semibold">Saldo</span><span class="fw-semibold" [class.text-danger]="saldo > 0">{{ saldo | cop }}</span></div>
+          }
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header bg-white d-flex align-items-center">
+          <span class="fw-semibold me-auto">{{ cfg.pago }}s</span>
+          @if (saldo > 0 && f.estado !== 'anulada') {
+            <button class="btn btn-sm btn-gold" (click)="abrirPago()"><i class="bi bi-plus-lg me-1"></i>Registrar {{ cfg.pago.toLowerCase() }}</button>
+          }
+        </div>
+        <ul class="list-group list-group-flush">
+          @for (p of f.pagos; track p.id) {
+            <li class="list-group-item d-flex align-items-center gap-2">
+              <div class="me-auto">
+                <div class="fw-semibold">{{ p.valor | cop }}</div>
+                <div class="small text-muted">{{ fechaCorta(p.fecha) }} · {{ nombreMetodo(p.metodo) }} {{ p.referencia ? '· ' + p.referencia : '' }}</div>
+              </div>
+              @if (f.estado !== 'anulada') {
+                <button class="btn btn-sm btn-link text-danger" title="Eliminar" (click)="eliminarPago(p.id)"><i class="bi bi-trash"></i></button>
+              }
+            </li>
+          } @empty {
+            <li class="list-group-item text-muted small text-center py-3">Sin {{ cfg.pago.toLowerCase() }}s registrados.</li>
+          }
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  @if (modalPago()) {
+    <div class="modal d-block" tabindex="-1">
+      <div class="modal-dialog modal-dialog-centered modal-fullscreen-sm-down">
+        <form class="modal-content" (ngSubmit)="guardarPago()">
+          <div class="modal-header">
+            <h5 class="modal-title">Registrar {{ cfg.pago.toLowerCase() }} · {{ f.numero }}</h5>
+            <button type="button" class="btn-close" (click)="modalPago.set(false)"></button>
+          </div>
+          <div class="modal-body">
+            <div class="alert alert-light border small mb-3">Saldo actual: <b>{{ saldo | cop }}</b></div>
+            <div class="row g-3">
+              <div class="col-6">
+                <label class="form-label">Valor *</label>
+                <div class="input-group"><span class="input-group-text">$</span>
+                  <input class="form-control" appNumero name="valor" [(ngModel)]="pago.valor" /></div>
+              </div>
+              <div class="col-6">
+                <label class="form-label">Fecha</label>
+                <input class="form-control" type="date" name="fecha" [(ngModel)]="pago.fecha" />
+              </div>
+              <div class="col-6">
+                <label class="form-label">Método</label>
+                <select class="form-select" name="metodo" [(ngModel)]="pago.metodo">
+                  @for (m of metodos; track m.id) { <option [value]="m.id">{{ m.nombre }}</option> }
+                </select>
+              </div>
+              <div class="col-6">
+                <label class="form-label">Referencia</label>
+                <input class="form-control" name="referencia" [(ngModel)]="pago.referencia" placeholder="No. transacción" />
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-light" (click)="modalPago.set(false)">Cancelar</button>
+            <button type="submit" class="btn btn-primary" [disabled]="guardando()">Guardar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+    <div class="modal-backdrop show"></div>
+  }
+}
